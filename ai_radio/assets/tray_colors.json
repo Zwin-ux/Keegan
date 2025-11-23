@@ -1,0 +1,12 @@
+{
+  "moods": {
+    "focus_room": { "color": "#d18a32", "label": "Amber" },
+    "rain_cave": { "color": "#2f6fa3", "label": "Blue" },
+    "arcade_night": { "color": "#d61f8c", "label": "Neon Magenta" },
+    "sleep_ship": { "color": "#2c2f55", "label": "Indigo" }
+  },
+  "intensity_pulse": {
+    "min_rate_hz": 0.4,
+    "max_rate_hz": 2.0
+  }
+}

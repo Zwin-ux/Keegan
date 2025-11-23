@@ -1,0 +1,58 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "maxConcurrentRequests": 256,
+    "requestTimeoutMs": 30000
+  },
+  "targets": [
+    {
+      "name": "openai_primary",
+      "type": "openai",
+      "baseUrl": "https://api.openai.com/v1",
+      "apiKeyEnv": "OPENAI_API_KEY",
+      "models": ["gpt_4o", "gpt_4o_mini"]
+    },
+    {
+      "name": "anthropic_primary",
+      "type": "anthropic",
+      "baseUrl": "https://api.anthropic.com/v1",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "models": ["claude_3_5_sonnet"]
+    },
+    {
+      "name": "local_http",
+      "type": "http",
+      "baseUrl": "http://localhost:9000",
+      "models": ["local_instruct"]
+    }
+  ],
+  "routes": [
+    {
+      "name": "default_chat",
+      "match": {
+        "path": "/v1/chat",
+        "modelPrefix": "gpt"
+      },
+      "strategy": {
+        "type": "round_robin",
+        "targets": ["openai_primary"]
+      }
+    },
+    {
+      "name": "anthropic_chat",
+      "match": {
+        "path": "/v1/chat",
+        "modelPrefix": "claude"
+      },
+      "strategy": {
+        "type": "round_robin",
+        "targets": ["anthropic_primary"]
+      }
+    }
+  ],
+  "logging": {
+    "mode": "stdout",
+    "level": "info"
+  }
+}

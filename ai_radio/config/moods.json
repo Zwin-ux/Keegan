@@ -1,0 +1,90 @@
+{
+  "name": "keegan_default",
+  "version": "0.1",
+  "moods": [
+    {
+      "id": "focus_room",
+      "display_name": "Focus Room",
+      "energy": 0.55,
+      "tension": 0.35,
+      "warmth": 0.55,
+      "color": 0.6,
+      "density_curve": [0.35, 0.55],
+      "narrative_frequency": 0.03,
+      "allowed_transitions": ["rain_cave", "arcade_night"],
+      "stems": [
+        {"file": "assets/stems/focus/base_drone.wav", "role": "base", "gain_db": -2},
+        {"file": "assets/stems/focus/rhythm_tick.wav", "role": "rhythm", "gain_db": -6},
+        {"file": "assets/stems/focus/texture_paper.wav", "role": "env", "gain_db": -8}
+      ],
+      "synth": {
+        "preset": "assets/presets/focus.pad.json",
+        "seed": 101,
+        "pattern_density": 0.3
+      }
+    },
+    {
+      "id": "rain_cave",
+      "display_name": "Rain Cave",
+      "energy": 0.35,
+      "tension": 0.25,
+      "warmth": 0.45,
+      "color": 0.3,
+      "density_curve": [0.25, 0.35, 0.4, 0.25],
+      "narrative_frequency": 0.04,
+      "allowed_transitions": ["focus_room", "sleep_ship"],
+      "stems": [
+        {"file": "assets/stems/rain/drone_water.wav", "role": "base", "gain_db": -3},
+        {"file": "assets/stems/rain/drops_layer.wav", "role": "env", "gain_db": -6},
+        {"file": "assets/stems/rain/metal_echo.wav", "role": "melodic", "gain_db": -10}
+      ],
+      "synth": {
+        "preset": "assets/presets/rain.fm.json",
+        "seed": 202,
+        "pattern_density": 0.2
+      }
+    },
+    {
+      "id": "arcade_night",
+      "display_name": "Arcade Night",
+      "energy": 0.7,
+      "tension": 0.5,
+      "warmth": 0.35,
+      "color": 0.8,
+      "density_curve": [0.4, 0.6, 0.75, 0.55],
+      "narrative_frequency": 0.06,
+      "allowed_transitions": ["focus_room", "rain_cave"],
+      "stems": [
+        {"file": "assets/stems/arcade/neon_bed.wav", "role": "base", "gain_db": -4},
+        {"file": "assets/stems/arcade/coin_echo.wav", "role": "env", "gain_db": -9, "probability": 0.5},
+        {"file": "assets/stems/arcade/synth_line.wav", "role": "melodic", "gain_db": -6}
+      ],
+      "synth": {
+        "preset": "assets/presets/arcade.seq.json",
+        "seed": 303,
+        "pattern_density": 0.55
+      }
+    },
+    {
+      "id": "sleep_ship",
+      "display_name": "Sleep Ship",
+      "energy": 0.2,
+      "tension": 0.2,
+      "warmth": 0.6,
+      "color": 0.1,
+      "density_curve": [0.15, 0.2, 0.25, 0.35, 0.2],
+      "narrative_frequency": 0.02,
+      "allowed_transitions": ["rain_cave"],
+      "stems": [
+        {"file": "assets/stems/sleep/engine_thrum.wav", "role": "base", "gain_db": -5},
+        {"file": "assets/stems/sleep/ventilation.wav", "role": "env", "gain_db": -8},
+        {"file": "assets/stems/sleep/hull_creak.wav", "role": "env", "gain_db": -12, "probability": 0.2}
+      ],
+      "synth": {
+        "preset": "assets/presets/sleep.pad.json",
+        "seed": 404,
+        "pattern_density": 0.15
+      }
+    }
+  ]
+}
