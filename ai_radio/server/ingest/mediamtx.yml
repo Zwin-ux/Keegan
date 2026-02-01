@@ -1,0 +1,24 @@
+#############################################
+# MediaMTX sample config for Keegan ingest
+# Download MediaMTX and run:
+#   mediamtx.exe mediamtx.yml
+#############################################
+
+# Allow any path (stream key is part of the path).
+paths:
+  all:
+    source: publisher
+
+# Enable RTMP and HLS.
+rtmp: yes
+hls: yes
+
+# Listen ports (defaults shown).
+rtmpAddress: :1935
+hlsAddress: :8888
+
+#############################################
+# Stream key usage:
+#   RTMP: rtmp://localhost/live/<token>
+#   HLS:  http://localhost:8888/live/<token>/index.m3u8
+#############################################

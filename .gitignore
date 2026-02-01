@@ -1,0 +1,21 @@
+.vscode/
+**/.claude/
+.DS_Store
+*.log
+build_log.txt
+
+# Node
+**/node_modules/
+**/dist/
+**/.vite/
+
+# Build outputs
+ai_radio/build/
+ai_radio/cache/
+ai_radio/llm_router/build/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/*.sln
+**/*.vcxproj
+**/*.vcxproj.filters
+**/*.vcxproj.user

@@ -1,0 +1,8 @@
+{
+  "name": "Keegan Local",
+  "region": "us-midwest",
+  "frequency": 98.7,
+  "description": "Local vibe engine broadcast",
+  "streamUrl": "",
+  "registryUrl": "http://localhost:8090"
+}

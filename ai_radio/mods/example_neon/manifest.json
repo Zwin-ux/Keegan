@@ -1,0 +1,11 @@
+{
+  "id": "example_neon",
+  "name": "Example Neon",
+  "version": "1.0.0",
+  "engineVersion": ">=0.1.0",
+  "frequencySeed": 101.8,
+  "region": "us-midwest",
+  "author": "keegan-community",
+  "permissions": ["vibe.basic", "vibe.apps"],
+  "entry": "scripts/vibe.lua"
+}

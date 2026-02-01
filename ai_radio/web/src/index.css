@@ -1,0 +1,53 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg-dark: #05070d;
+  --glass-panel: rgba(20, 25, 35, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --font-body: "Space Grotesk", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: #e0e6ed;
+  font-family: var(--font-body);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+.glass-panel {
+  background: var(--glass-panel);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  border-radius: 12px;
+}
+
+.glass-button {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.glass-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.glass-button:active {
+  transform: scale(0.98);
+}
+
+.glass-button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.3);
+  outline-offset: 2px;
+}

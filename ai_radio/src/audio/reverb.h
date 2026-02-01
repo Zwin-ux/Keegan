@@ -12,7 +12,8 @@ public:
 
     void setParams(float preDelayMs, float decay, float damping);
 
-    void process(std::vector<float> &buffer);
+    // Process buffer with reverb. wetMix controls dry/wet blend (0.0 = dry, 1.0 = fully wet).
+    void process(std::vector<float> &buffer, float wetMix = 0.3f);
 
 private:
     float sampleRate_;

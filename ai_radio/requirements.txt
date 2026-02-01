@@ -1,0 +1,2 @@
+# No external dependencies - uses Python standard library only
+# Add packages here as needed (e.g. openai, requests)

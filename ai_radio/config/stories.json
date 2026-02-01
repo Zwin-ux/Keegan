@@ -1,0 +1,26 @@
+[
+  {
+    "id": "intro_focus",
+    "text": "The library is quiet tonight.",
+    "audio_file": "assets/voice/focus/library_quiet.wav",
+    "mood": "focus_room"
+  },
+  {
+    "id": "intro_rain",
+    "text": "Water remembers everything.",
+    "audio_file": "assets/voice/rain/water_remembers.wav",
+    "mood": "rain_cave"
+  },
+  {
+    "id": "intro_arcade",
+    "text": "The data streams are cold.",
+    "audio_file": "assets/voice/arcade/data_streams.wav",
+    "mood": "arcade_night"
+  },
+  {
+    "id": "intro_sleep",
+    "text": "Drifting into the void.",
+    "audio_file": "assets/voice/sleep/drifting.wav",
+    "mood": "sleep_ship"
+  }
+]

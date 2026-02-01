@@ -1,0 +1,179 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Keegan Station Directory</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0d12;
+      --panel: #121622;
+      --accent: #f59e0b;
+      --muted: #8790a8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      background: radial-gradient(circle at top, #151a29, #0b0d12 60%);
+      color: #e6eaf2;
+    }
+    header {
+      padding: 32px 24px 12px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 16px 24px;
+    }
+    .controls input {
+      background: var(--panel);
+      border: 1px solid #1f273a;
+      color: #e6eaf2;
+      padding: 8px 10px;
+      border-radius: 6px;
+      min-width: 180px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      padding: 0 24px 32px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid #1f273a;
+      border-radius: 10px;
+      padding: 14px;
+      display: grid;
+      gap: 8px;
+      min-height: 140px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+    .freq {
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+    }
+    .muted { color: var(--muted); }
+    .status {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #14202f;
+      display: inline-block;
+    }
+    .empty {
+      padding: 24px;
+      color: var(--muted);
+      text-align: center;
+    }
+    a.link {
+      color: #9dd6ff;
+      text-decoration: none;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    a.link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Keegan Station Directory</h1>
+    <p>Regional discovery feed for live frequencies.</p>
+  </header>
+
+  <section class="controls">
+    <input id="region" placeholder="region (ex: us-midwest)" />
+    <input id="search" placeholder="search station name" />
+  </section>
+
+  <section id="grid" class="grid"></section>
+  <div id="empty" class="empty" style="display:none;">No stations yet.</div>
+
+  <script>
+    const grid = document.getElementById('grid');
+    const empty = document.getElementById('empty');
+    const regionInput = document.getElementById('region');
+    const searchInput = document.getElementById('search');
+
+    async function fetchStations() {
+      const region = regionInput.value.trim();
+      const url = new URL('/api/stations', window.location.origin);
+      if (region) url.searchParams.set('region', region);
+      const res = await fetch(url.toString());
+      const data = await res.json();
+      return data.stations || [];
+    }
+
+    function render(stations) {
+      const query = searchInput.value.trim().toLowerCase();
+      const filtered = stations.filter(s => !query || (s.name || '').toLowerCase().includes(query));
+
+      grid.innerHTML = '';
+      if (filtered.length === 0) {
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+
+      filtered.forEach(station => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const name = station.name || station.id;
+        const freq = station.frequency || '--';
+        const region = station.region || 'unknown';
+        const status = station.status || 'idle';
+        const description = station.description || 'No description provided.';
+        const stream = station.streamUrl || '';
+        card.innerHTML = `
+          <div class="badge"><span class="freq">${freq}</span> MHz</div>
+          <div>${name}</div>
+          <div class="muted">${description}</div>
+          <div class="badge">${region} <span class="status">${status}</span>${typeof station.listenerCount === 'number' ? ` · ${station.listenerCount} listeners` : ''}</div>
+          ${stream ? `<a class="link" href="${stream}" target="_blank" rel="noreferrer">open stream</a>` : ''}
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    async function refresh() {
+      try {
+        const stations = await fetchStations();
+        render(stations);
+      } catch (err) {
+        grid.innerHTML = '';
+        empty.style.display = 'block';
+        empty.textContent = 'Failed to load stations.';
+      }
+    }
+
+    regionInput.addEventListener('input', refresh);
+    searchInput.addEventListener('input', refresh);
+
+    refresh();
+    setInterval(refresh, 10000);
+  </script>
+</body>
+</html>

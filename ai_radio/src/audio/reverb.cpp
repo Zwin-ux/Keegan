@@ -38,8 +38,12 @@ void SimplePlateReverb::setParams(float preDelayMs, float decay, float damping) 
     preDelayIdx_ = 0;
 }
 
-void SimplePlateReverb::process(std::vector<float> &buffer) {
+void SimplePlateReverb::process(std::vector<float> &buffer, float wetMix) {
     if (buffer.empty()) return;
+    
+    // Clamp wetMix to valid range
+    wetMix = std::clamp(wetMix, 0.0f, 1.0f);
+    
     std::vector<float> wet(buffer.size(), 0.0f);
 
     for (size_t n = 0; n < buffer.size(); ++n) {
@@ -76,8 +80,11 @@ void SimplePlateReverb::process(std::vector<float> &buffer) {
         wet[n] = apOut;
     }
 
-    // Mix back into buffer (wet replaces dry for now)
-    buffer = wet;
+    // Mix dry and wet signals
+    const float dryMix = 1.0f - wetMix;
+    for (size_t i = 0; i < buffer.size(); ++i) {
+        buffer[i] = buffer[i] * dryMix + wet[i] * wetMix;
+    }
 }
 
 } // namespace audio
