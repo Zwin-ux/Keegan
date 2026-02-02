@@ -1,14 +1,17 @@
-# Frequency (Project: Keenga)
+# Frequency (powered by Keegan)
 
 ![Keegan glyph](assets/logo.png)
 
-Frequency is the listener-facing name for Keenga — a tray-first local radio engine that weaves moods instead of playlists. It lives in the Windows system tray, runs offline, and drifts through stems, procedural synth, and tiny whispered stories.
+Frequency is the listener-facing name for Keegan — a tray-first local radio engine that weaves moods instead of playlists. It lives in the Windows system tray, runs offline, and drifts through stems, procedural synth, and tiny whispered stories.
 
 Website (local registry UI): http://localhost:8090/  
 Website (production): TBD
 
-## Start here (5 minutes)
-This is the shortest path from zero to sound.
+## Visuals
+![Radioverse Console](assets/console_preview.svg)
+
+## Start here (host a station first)
+This flow gets a live station visible in the directory.
 
 1) **Start the registry (the directory).**
 ```bash
@@ -17,7 +20,7 @@ python registry_server.py
 ```
 Open the directory UI: http://localhost:8090/
 
-2) **Start the web console (the listener view).**
+2) **Start the web console (the listener view + ingest control).**
 ```bash
 cd ai_radio/web
 npm install
@@ -36,10 +39,23 @@ Run from the repo root so it can serve `web/dist`:
 ai_radio/build/Release/keegan_patched.exe
 ```
 
-4) **If the directory doesn’t load:**
+4) **Go live.**
+- In the web console, open **Ingest Control**.
+- Generate a token and use the RTMP URL in your encoder (see `server/ingest/README.md`).
+
+5) **If the directory doesn’t load:**
 - Check http://localhost:8090/health returns `{ ok: true, ... }`.
 - Make sure the registry allows your UI origin (`ALLOWED_ORIGINS` in `server/README.md`).
 - The UI shows the exact failure reason next to the REGISTRY label.
+
+## Listen now (no hosting required)
+If you just want to listen:
+```bash
+cd ai_radio/web
+npm install
+npm run dev
+```
+Open http://localhost:5173/ and pick a station from the Regional Directory.
 
 ## What it does
 - Tray controls: play/pause, intensity, mood select (Focus Room, Rain Cave, Arcade Night, Sleep Ship).
@@ -48,10 +64,7 @@ ai_radio/build/Release/keegan_patched.exe
 - Content: bundled stems plus procedural synth; micro-stories come from a prewritten list for MVP.
 
 ## Host a station (local)
-If you want to broadcast your own “frequency”:
-- Use the **Ingest Control** panel in the web console to generate a token.
-- Point your RTMP encoder at the token URL (see `server/ingest/README.md`).
-- Your station appears in the registry directory when the EXE is online.
+If you want to broadcast your own “frequency,” the web console handles tokens and URLs for you. See `server/ingest/README.md` for the RTMP wiring.
 
 ## Telemetry (opt‑in)
 Telemetry is **off by default**.
