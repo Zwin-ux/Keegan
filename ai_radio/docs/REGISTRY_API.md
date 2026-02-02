@@ -150,6 +150,24 @@ Body:
 ### GET /api/stations/<id>/status
 Returns broadcast session state (if active).
 
+### POST /api/stations/<id>/pairing/start
+Returns a short-lived pairing code (creator auth required if enabled).
+Response:
+```
+{ "pairingCode": "AB12CD", "expiresAtMs": 1738420000000 }
+```
+
+### POST /api/stations/pairing/claim
+Claims a pairing code and returns a station-scoped token.
+Body:
+```
+{ "pairingCode": "AB12CD", "deviceName": "Studio PC" }
+```
+Response:
+```
+{ "stationId": "st_123", "stationToken": "<token>", "expiresAtMs": 1738420000000 }
+```
+
 ### GET /health
 Returns:
 ```

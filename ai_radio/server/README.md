@@ -17,6 +17,7 @@ Set `KEEGAN_TELEMETRY=1` to enable `/api/telemetry` logging (writes JSONL to `se
 Set `KEEGAN_INGEST_SECRET` to sign web-host ingest tokens.
 Set `KEEGAN_INGEST_RTMP_BASE`, `KEEGAN_INGEST_HLS_BASE`, `KEEGAN_INGEST_WEBRTC_BASE` for hosted ingest URLs.
 Anonymous mode tuning: `KEEGAN_ANON_SESSION_MS` (default 240000), `KEEGAN_ANON_COOLDOWN_MS` (default 600000).
+Pairing flow: `KEEGAN_PAIRING_TTL_MS` (default 300000), `KEEGAN_STATION_TOKEN_MS` (default 2592000000).
 
 ## API
 - GET /api/stations
@@ -33,6 +34,8 @@ Anonymous mode tuning: `KEEGAN_ANON_SESSION_MS` (default 240000), `KEEGAN_ANON_C
 - POST /api/stations/web/begin
 - POST /api/stations/web/stop
 - GET /api/stations/<id>/status
+- POST /api/stations/<id>/pairing/start
+- POST /api/stations/pairing/claim
 
 ## UI
 Open http://localhost:8090/ to view the directory.

@@ -32,6 +32,8 @@ INGEST_WEBRTC_BASE = os.environ.get('KEEGAN_INGEST_WEBRTC_BASE', 'http://localho
 ANON_SESSION_MS = int(os.environ.get('KEEGAN_ANON_SESSION_MS', str(4 * 60 * 1000)))
 ANON_COOLDOWN_MS = int(os.environ.get('KEEGAN_ANON_COOLDOWN_MS', str(10 * 60 * 1000)))
 CREATOR_SESSION_MS = int(os.environ.get('KEEGAN_CREATOR_SESSION_MS', str(12 * 60 * 60 * 1000)))
+PAIRING_TTL_MS = int(os.environ.get('KEEGAN_PAIRING_TTL_MS', str(5 * 60 * 1000)))
+STATION_TOKEN_MS = int(os.environ.get('KEEGAN_STATION_TOKEN_MS', str(30 * 24 * 60 * 60 * 1000)))
 
 DEFAULT_ALLOWED_ORIGINS = [
     'http://localhost:3000',
@@ -116,6 +118,27 @@ def verify_ingest_token(token):
     except Exception:
         return None
     if payload.get('exp') and payload['exp'] < now_ms():
+        return None
+    return payload
+
+
+def make_station_token(station_id):
+    exp = now_ms() + STATION_TOKEN_MS
+    payload = {
+        'stationId': station_id,
+        'scope': 'station',
+        'exp': exp,
+    }
+    return make_ingest_token(payload), exp
+
+
+def verify_station_token(token, station_id=None):
+    payload = verify_ingest_token(token)
+    if not payload:
+        return None
+    if payload.get('scope') != 'station':
+        return None
+    if station_id and payload.get('stationId') != station_id:
         return None
     return payload
 
@@ -503,6 +526,54 @@ class IngestSessionStore:
 SESSIONS = IngestSessionStore()
 
 
+class PairingStore:
+    def __init__(self):
+        self.codes = {}
+        self.station_codes = {}
+        self.lock = threading.Lock()
+
+    def _cleanup(self):
+        now = now_ms()
+        expired = [code for code, entry in self.codes.items() if entry.get('expiresAtMs', 0) <= now]
+        for code in expired:
+            station_id = self.codes[code]['stationId']
+            self.codes.pop(code, None)
+            if self.station_codes.get(station_id) == code:
+                self.station_codes.pop(station_id, None)
+
+    def _generate_code(self):
+        alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+        return ''.join(random.choice(alphabet) for _ in range(6))
+
+    def start(self, station_id):
+        with self.lock:
+            self._cleanup()
+            previous = self.station_codes.get(station_id)
+            if previous:
+                self.codes.pop(previous, None)
+            code = self._generate_code()
+            while code in self.codes:
+                code = self._generate_code()
+            expires_at = now_ms() + PAIRING_TTL_MS
+            self.codes[code] = {'stationId': station_id, 'expiresAtMs': expires_at}
+            self.station_codes[station_id] = code
+            return code, expires_at
+
+    def claim(self, code):
+        with self.lock:
+            self._cleanup()
+            entry = self.codes.pop(code, None)
+            if not entry:
+                return None
+            station_id = entry['stationId']
+            if self.station_codes.get(station_id) == code:
+                self.station_codes.pop(station_id, None)
+            return entry
+
+
+PAIRING = PairingStore()
+
+
 class RegistryHandler(BaseHTTPRequestHandler):
     def _origin_allowed(self, origin):
         if '*' in ALLOWED_ORIGINS:
@@ -545,7 +616,7 @@ class RegistryHandler(BaseHTTPRequestHandler):
             if origin != '*':
                 self.send_header('Vary', 'Origin')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Api-Key, X-Client-Id, X-Session-Id')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Api-Key, X-Client-Id, X-Session-Id, X-Station-Token')
 
     def _send_json(self, status, payload):
         self.send_response(status)
@@ -564,6 +635,20 @@ class RegistryHandler(BaseHTTPRequestHandler):
         if auth.startswith('Bearer '):
             return auth.split('Bearer ', 1)[1] == REGISTRY_KEY
         return False
+
+    def _station_token_payload(self):
+        token = self.headers.get('X-Station-Token')
+        if not token:
+            return None
+        return verify_station_token(token)
+
+    def _authorized_station(self, station_id):
+        if not REGISTRY_KEY:
+            return True
+        if self._authorized():
+            return True
+        payload = self._station_token_payload()
+        return payload is not None and payload.get('stationId') == station_id
 
     def do_OPTIONS(self):
         origin = self.headers.get('Origin')
@@ -640,6 +725,47 @@ class RegistryHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path.startswith('/api/stations/') and parsed.path.endswith('/pairing/start'):
+            station_id = parsed.path.split('/api/stations/')[1].split('/pairing/start')[0]
+            if station_id == 'anon':
+                self._send_json(400, {'error': 'pairing_not_allowed'})
+                return
+            if REGISTRY_KEY and not self._authorized():
+                self._send_json(401, {'error': 'unauthorized'})
+                return
+            station = STORE.get(station_id)
+            if not station:
+                self._send_json(404, {'error': 'not_found'})
+                return
+            code, expires_at = PAIRING.start(station_id)
+            self._send_json(200, {'pairingCode': code, 'expiresAtMs': expires_at})
+            return
+
+        if parsed.path == '/api/stations/pairing/claim':
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length) if length > 0 else b'{}'
+            try:
+                payload = json.loads(body.decode('utf-8'))
+            except Exception:
+                self._send_json(400, {'error': 'invalid_json'})
+                return
+            code = payload.get('pairingCode')
+            if not code:
+                self._send_json(400, {'error': 'pairing_code_required'})
+                return
+            entry = PAIRING.claim(code)
+            if not entry:
+                self._send_json(404, {'error': 'pairing_code_invalid'})
+                return
+            station_id = entry['stationId']
+            token, exp = make_station_token(station_id)
+            append_telemetry({
+                'event': 'pairing_claim',
+                'stationId': station_id,
+            })
+            self._send_json(200, {'stationId': station_id, 'stationToken': token, 'expiresAtMs': exp})
+            return
+
         if parsed.path == '/api/stations/web/begin':
             length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(length) if length > 0 else b'{}'
@@ -734,15 +860,16 @@ class RegistryHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == '/api/stations':
-            if not self._authorized():
-                self._send_json(401, {'error': 'unauthorized'})
-                return
             length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(length) if length > 0 else b'{}'
             try:
                 payload = json.loads(body.decode('utf-8'))
             except Exception:
                 self._send_json(400, {'error': 'invalid_json'})
+                return
+            station_id = payload.get('id')
+            if REGISTRY_KEY and not (self._authorized() or (station_id and self._authorized_station(station_id))):
+                self._send_json(401, {'error': 'unauthorized'})
                 return
             station = STORE.upsert(payload)
             append_telemetry({
@@ -756,10 +883,10 @@ class RegistryHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path.startswith('/api/stations/') and parsed.path.endswith('/heartbeat'):
-            if not self._authorized():
+            station_id = parsed.path.split('/api/stations/')[1].split('/heartbeat')[0]
+            if not self._authorized_station(station_id):
                 self._send_json(401, {'error': 'unauthorized'})
                 return
-            station_id = parsed.path.split('/api/stations/')[1].split('/heartbeat')[0]
             station = STORE.heartbeat(station_id)
             if not station:
                 self._send_json(404, {'error': 'not_found'})
@@ -768,10 +895,10 @@ class RegistryHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path.startswith('/api/stations/') and parsed.path.endswith('/listen'):
-            if not self._authorized():
+            station_id = parsed.path.split('/api/stations/')[1].split('/listen')[0]
+            if REGISTRY_KEY and not self._authorized():
                 self._send_json(401, {'error': 'unauthorized'})
                 return
-            station_id = parsed.path.split('/api/stations/')[1].split('/listen')[0]
             length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(length) if length > 0 else b'{}'
             try:

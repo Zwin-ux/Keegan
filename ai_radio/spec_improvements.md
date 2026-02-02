@@ -549,6 +549,171 @@ EXE becomes a local enhancer: audio textures, procedural ambience, and optional 
 
 ---
 
+# System Relationship Spec (Fly + Render + Vercel + EXE)
+
+Goal: define the lean, reliable relationship between the public web UI (Vercel), registry API (Render), ingest server (Fly), and the optional EXE add-on. This is the minimum architecture that keeps the data model consistent and avoids unnecessary coupling.
+
+## 1) Roles and Sources of Truth
+
+- **Vercel (Web UI)**: UI only. No state, no persistence. Talks to Render (registry) and plays HLS from Fly.
+- **Render (Registry API)**: source of truth for stations, rooms, sessions, listener counts. Controls auth + token issuance.
+- **Fly (Ingest / MediaMTX)**: transport only. No station metadata. Takes RTMP/WebRTC and exposes HLS.
+- **EXE (Local Engine Add-on)**: optional producer of station metadata + audio layer. Uses Render to register and update a station.
+
+## 2) Data Model (Lean)
+
+**Station** (registry owns this)
+```
+id, name, description, region, frequency, streamUrl,
+status, broadcasting, coverImage,
+broadcastMode, broadcastSessionId, broadcastStartedAtMs,
+updatedAt, lastSeen
+```
+
+**Session** (registry owns this; short-lived)
+```
+sessionId, stationId, mode (anon|creator|exe),
+token, startedAtMs, endsAtMs, clientId
+```
+
+**Listener presence** (registry owns this; ephemeral)
+```
+stationId, listenerId, lastSeen
+```
+
+**Room presence** (registry owns this; ephemeral)
+```
+roomId, listenerId, lastSeen
+```
+
+**Telemetry** (registry owns this; append-only JSONL when enabled)
+```
+event, ts, stationId, roomId, sessionId, mode
+```
+
+## 3) Service Relationships (ASCII map)
+
+```
+                     +----------------------+
+  Web UI (Vercel) <--|  Render Registry API |--> data.json (stations/rooms)
+        |            +----------------------+
+        |                          ^
+        |                          |
+        v                          |
+  HLS playback (Fly) <-------------+ token + ingest urls
+        ^
+        |
+  WebRTC/RTMP ingest (Fly)
+
+  EXE (optional) ----> Render Registry API (station updates)
+  EXE (optional) ----> Fly ingest (audio layer)
+```
+
+## 4) Flow: Web Host (Anonymous)
+
+1) UI calls Render: `POST /api/stations/web/begin` with mode=anon.
+2) Render creates a **session** and returns:
+   - signed token
+   - ingest URLs (Fly base + token)
+   - stationId = "anon"
+3) UI uses WebRTC to send mic to Fly ingest.
+4) Render marks station as broadcasting and exposes HLS URL.
+5) UI + listeners play HLS from Fly.
+6) Render expires session after 4 minutes, marks station idle.
+
+## 5) Flow: Web Host (Creator)
+
+1) UI calls Render with creator metadata (requires registry key if locked).
+2) Render upserts a **Station** and returns token + ingest URLs.
+3) UI sends audio to Fly ingest.
+4) Render marks station broadcasting, stores session + streamUrl.
+
+## 6) Flow: EXE Add-on
+
+1) EXE gets stationId and token (creator flow or existing config).
+2) EXE sends station updates to Render:
+   - mood, energy, status, description, coverImage, etc.
+3) EXE optionally publishes audio layer to Fly ingest (RTMP).
+4) Render updates station metadata; UI reads it normally.
+
+## 7) Efficiency + Lean Ops
+
+- **Registry writes**: only on station upsert/heartbeat and session changes.
+- **Listener counts**: in-memory map + TTL; no DB writes per listener event.
+- **Rooms**: in-memory + occasional JSON save (current pattern).
+- **Ingest server**: stateless, no DB.
+- **UI**: pure client; can be cached CDN.
+
+## 8) Failure Modes
+
+- Fly ingest down: station shows broadcasting=false, UI shows playback error.
+- Render down: UI shows registry offline; no station list updates.
+- Vercel down: no UI, but ingest can still run (metadata stale).
+- EXE down: station metadata becomes stale, but web host can continue.
+
+## 9) Minimal Consistency Rules
+
+- Render is the only service that assigns sessions and tokens.
+- Fly never writes to registry; it only serves media.
+- UI never writes to Fly; it only posts to Render and sends media to Fly.
+- EXE posts only to Render (metadata) + Fly (audio).
+
+## 10) Required Env Wiring
+
+**Render (registry):**
+- KEEGAN_INGEST_SECRET
+- KEEGAN_INGEST_RTMP_BASE
+- KEEGAN_INGEST_HLS_BASE
+- KEEGAN_INGEST_WEBRTC_BASE
+- ALLOWED_ORIGINS
+- KEEGAN_REGISTRY_KEY (optional)
+
+**Vercel (web UI):**
+- VITE_REGISTRY_URL
+- VITE_REGISTRY_KEY (if creator mode locked)
+
+**Fly (ingest):**
+- No registry secrets needed. Just MediaMTX.
+
+---
+
+# Open Questions (lean + ops)
+1) Should we move registry storage from JSON to a real DB (SQLite/Postgres), or keep JSON for now?
+2) Do you want EXE to be able to "claim" a station that was created on the web (pairing flow)?
+3) Should anonymous broadcasts be recorded or always ephemeral only?
+
+## Decisions (locked)
+- **Registry storage**: keep JSON for now. Migrate to SQLite/Postgres when we cross ~50 active stations or ~10k listener events/day.
+- **EXE pairing**: yes, allow EXE to claim a web-created station via a short pairing code.
+- **Anonymous**: always ephemeral, no recording.
+
+## EXE Pairing Flow (spec)
+
+Goal: let a web-created station be claimed by a local EXE without sharing long-lived secrets.
+
+### Flow
+1) Web UI requests a short-lived pairing code for a station.
+2) EXE enters the code and receives a station-bound token.
+3) EXE can now update station metadata and (optionally) publish audio to Fly.
+
+### Minimal endpoints
+```
+POST /api/stations/<id>/pairing/start
+  -> { pairingCode, expiresAtMs }
+
+POST /api/stations/pairing/claim
+  body: { pairingCode, deviceName }
+  -> { stationId, stationToken }
+```
+
+### Rules
+- Pairing code expires in 5 minutes.
+- Code is single-use.
+- Station token is scoped to that station only.
+- If `KEEGAN_REGISTRY_KEY` is enabled, pairing start requires it.
+
+---
+
 # Frequency Console UI Overhaul (Spec v2)
 
 Goal: make the web console feel like a real radio control desk, not a generic dashboard. The UI should feel tactile, dense, and intentional. It should look hand-designed with a distinct palette, strong typography, and analog-inspired details.

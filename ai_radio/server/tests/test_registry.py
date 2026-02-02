@@ -15,6 +15,8 @@ os.environ['ALLOWED_ORIGINS'] = '*'
 os.environ['KEEGAN_ANON_SESSION_MS'] = '200'
 os.environ['KEEGAN_ANON_COOLDOWN_MS'] = '200'
 os.environ['KEEGAN_INGEST_SECRET'] = 'test-secret'
+os.environ['KEEGAN_PAIRING_TTL_MS'] = '200'
+os.environ['KEEGAN_STATION_TOKEN_MS'] = '500'
 
 import registry_server as registry
 
@@ -155,6 +157,27 @@ class RegistryTests(unittest.TestCase):
             headers={'X-Client-Id': 'client_a'},
         )
         self.assertEqual(status, 200)
+
+    def test_pairing_claim_returns_station_token(self):
+        station_id = 'st_pair'
+        status, payload = self.request_json('/api/stations', method='POST', payload={
+            'id': station_id,
+            'name': 'Pair Station',
+            'region': 'us-midwest',
+        })
+        self.assertEqual(status, 200)
+
+        status, payload = self.request_json(f'/api/stations/{station_id}/pairing/start', method='POST')
+        self.assertEqual(status, 200)
+        code = payload.get('pairingCode')
+        self.assertTrue(code)
+
+        status, payload = self.request_json('/api/stations/pairing/claim', method='POST', payload={
+            'pairingCode': code,
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(payload.get('stationId'), station_id)
+        self.assertTrue(payload.get('stationToken'))
 
 
 if __name__ == '__main__':

@@ -241,6 +241,10 @@ function App() {
   const [webHostBusy, setWebHostBusy] = useState(false);
   const [webHostError, setWebHostError] = useState<string | null>(null);
   const [webHostSessionId, setWebHostSessionId] = useState('');
+  const [pairingCode, setPairingCode] = useState('');
+  const [pairingExpiresAt, setPairingExpiresAt] = useState<number | null>(null);
+  const [pairingBusy, setPairingBusy] = useState(false);
+  const [pairingError, setPairingError] = useState<string | null>(null);
 
   const [hlsHealth, setHlsHealth] = useState<HlsHealth>({ status: 'idle' });
   const hlsSequenceRef = useRef<number | null>(null);
@@ -1024,6 +1028,35 @@ function App() {
     }
   }, [hostRegistryUrl, webHostToken, webHostStationId, webHostSessionId, REGISTRY_KEY, webHostMode]);
 
+  const requestPairingCode = useCallback(async () => {
+    if (!webHostStationId) {
+      setPairingError('Set a station id first.');
+      return;
+    }
+    setPairingBusy(true);
+    setPairingError(null);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (REGISTRY_KEY) headers['X-Api-Key'] = REGISTRY_KEY;
+      const res = await fetch(`${hostRegistryUrl}/api/stations/${webHostStationId}/pairing/start`, {
+        method: 'POST',
+        headers,
+      });
+      const body = await res.text();
+      const data = body ? JSON.parse(body) : {};
+      if (!res.ok) {
+        setPairingError(data.error ? `Pairing failed: ${data.error}` : 'Pairing failed.');
+        return;
+      }
+      setPairingCode(data.pairingCode || '');
+      setPairingExpiresAt(data.expiresAtMs || null);
+    } catch {
+      setPairingError('Unable to reach registry for pairing.');
+    } finally {
+      setPairingBusy(false);
+    }
+  }, [hostRegistryUrl, webHostStationId, REGISTRY_KEY]);
+
   useEffect(() => {
     fetchBroadcastStatus();
     const interval = window.setInterval(fetchBroadcastStatus, 5000);
@@ -1160,6 +1193,7 @@ function App() {
     : '0s';
   const tokenRemaining = broadcastTokenExpiry ? formatDurationMs(broadcastTokenExpiry - Date.now()) : null;
   const webHostRemaining = webHostExpiresAt ? formatDurationMs(webHostExpiresAt - Date.now()) : null;
+  const pairingRemaining = pairingExpiresAt ? formatDurationMs(pairingExpiresAt - Date.now()) : null;
   const hlsWindow = typeof hlsHealth.windowSeconds === 'number'
     ? formatDurationMs(hlsHealth.windowSeconds * 1000)
     : null;
@@ -1440,6 +1474,46 @@ function App() {
               {webHostError && (
                 <div className="mt-3 text-xs font-mono uppercase tracking-[0.2em] text-ember">
                   {webHostError}
+                </div>
+              )}
+
+              {webHostMode === 'creator' && (
+                <div className="mt-4 panel-inset p-4">
+                  <div className="kicker">Pair EXE</div>
+                  <div className="mt-2 text-sm text-muted">
+                    Generate a short-lived pairing code to claim this station from the desktop engine.
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={requestPairingCode}
+                      disabled={pairingBusy}
+                      className="glass-button rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[color:var(--ion)] disabled:opacity-40"
+                    >
+                      Generate code
+                    </button>
+                    <button
+                      onClick={() => copyText(pairingCode)}
+                      disabled={!pairingCode}
+                      className="glass-button rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-muted disabled:opacity-40"
+                    >
+                      Copy
+                    </button>
+                    {pairingRemaining && (
+                      <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[color:var(--cloud)]">
+                        expires {pairingRemaining}
+                      </span>
+                    )}
+                  </div>
+                  {pairingCode && (
+                    <div className="mt-3 text-lg font-mono tracking-[0.5em] text-[color:var(--cloud)]">
+                      {pairingCode}
+                    </div>
+                  )}
+                  {pairingError && (
+                    <div className="mt-2 text-xs font-mono uppercase tracking-[0.2em] text-ember">
+                      {pairingError}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
