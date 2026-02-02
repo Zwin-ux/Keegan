@@ -17,6 +17,11 @@ Website (production): TBD
 ## Start here (host a station first)
 This flow gets a live station visible in the directory.
 
+Shortcut (starts registry + web, and EXE if built):
+```powershell
+.\start_dev.ps1
+```
+
 1) **Start the registry (the directory).**
 ```bash
 cd ai_radio/server
@@ -51,6 +56,8 @@ ai_radio/build/Release/keegan_patched.exe
 - Check http://localhost:8090/health returns `{ ok: true, ... }`.
 - Make sure the registry allows your UI origin (`ALLOWED_ORIGINS` in `server/README.md`).
 - The UI shows the exact failure reason next to the REGISTRY label.
+
+Tip: Use the **Registry** selector in the header to switch between Public, Local, Mixed, or Custom registries.
 
 ## Troubleshooting (quick)
 - **Registry offline:** verify `python registry_server.py` is running and port 8090 is free.

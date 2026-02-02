@@ -48,6 +48,11 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(payload.get('ok'))
 
+    def test_seed(self):
+        status, payload = self.request_json('/api/seed')
+        self.assertEqual(status, 200)
+        self.assertTrue(payload.get('seed'))
+
     def test_station_upsert_and_list(self):
         status, payload = self.request_json('/api/stations', method='POST', payload={
             'name': 'Test Station',

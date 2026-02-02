@@ -313,3 +313,63 @@ Write a 1‑page internal post:
 - [ ] Unit tests for hashing + TTL + token validation
 - [ ] Integration tests for registry endpoints
 - [ ] A/B flag implementation and simple report
+
+---
+
+# Public Website + LAN Mode Plan
+
+Goal: Ship a real public website while keeping the EXE local-control experience smooth. Support both public and LAN discovery.
+
+## Architecture split (required)
+- **Public web app** (Vercel): directory + listening + docs.
+- **Public registry API** (Render): stations + rooms + telemetry.
+- **Local bridge (EXE)**: engine control + live state + ingest tokens.
+
+Why: A public website cannot talk to a user's localhost. The local bridge stays local, the registry stays public.
+
+## Registry modes
+- **Public registry**: hosted on Render, open for reads, gated for writes.
+- **Local registry**: optional Python process on LAN for private stations.
+- **UI toggle**: switch between Public / Local / Custom registry URL.
+
+## LAN mode (local/public mix)
+- **Auto-detect LAN**: EXE exposes its LAN IP in the web console.
+- **QR code** for LAN listeners to open the local console.
+- **Optional LAN registry**: run a local registry on the host machine for private rooms.
+
+## Public website plan
+- Deploy Vercel site from `ai_radio/web`.
+- Build: `npm run build`, output `dist`.
+- Env: `VITE_REGISTRY_URL=https://<render-service>.onrender.com`.
+- Add a landing page section: "Listen now" and "Host a station".
+
+## Render registry plan
+- Service: Python web service from `ai_radio/server`.
+- Start: `python registry_server.py`
+- Env: `ALLOWED_ORIGINS=https://<vercel-site>.vercel.app,http://localhost:5173`
+- Optional: `KEEGAN_TELEMETRY=1`
+
+## Spam protection policy (public)
+- **Reads:** open (no auth).
+- **Writes:** require `KEEGAN_REGISTRY_KEY` in production.
+- **Rate limit**: per-IP for `/api/rooms/*/presence` and `/api/stations`.
+- **Moderation**: soft delete flag for stations.
+
+## Room seed + frequency authority (fixes spec risks)
+- Registry serves a **global day seed** (UTC) to avoid timezone splits.
+- Registry assigns the **room frequency** on first presence.
+- Clients never compute final frequency alone.
+
+## Orchestration (dev)
+- Single script `start_dev.ps1` or `start_dev.bat` to launch:
+  - registry (8090)
+  - web UI (5173)
+  - optional EXE if built
+- Script checks and creates `server/data/` if missing.
+
+## Deliverables (public + LAN)
+- [ ] UI toggle for registry source (Public/Local/Custom)
+- [ ] Registry global seed endpoint
+- [ ] Registry room frequency assignment
+- [ ] LAN QR in console
+- [ ] One-command dev start

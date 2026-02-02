@@ -12,6 +12,7 @@ export interface Station {
   energy?: number;
   broadcasting?: boolean;
   listenerCount?: number;
+  source?: string;
 }
 
 export interface Room {
@@ -22,6 +23,7 @@ export interface Room {
   frequency?: number;
   listenerCount?: number;
   lastSeen?: number;
+  source?: string;
 }
 
 interface StationDirectoryProps {
@@ -161,13 +163,14 @@ export const StationDirectory: React.FC<StationDirectoryProps> = ({
                   <div className="mt-2 text-sm text-white/60">
                     {station.description ?? 'Signal locked. Atmosphere undefined.'}
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.18em] text-white/40">
-                    <span>{station.region ?? 'unknown region'}</span>
-                    {station.mood && <span>{station.mood.replace('_', ' ')}</span>}
-                    {typeof station.energy === 'number' && (
-                      <span>{Math.round(station.energy * 100)}% energy</span>
-                    )}
-                  </div>
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.18em] text-white/40">
+                  <span>{station.region ?? 'unknown region'}</span>
+                  {station.source && <span>{station.source}</span>}
+                  {station.mood && <span>{station.mood.replace('_', ' ')}</span>}
+                  {typeof station.energy === 'number' && (
+                    <span>{Math.round(station.energy * 100)}% energy</span>
+                  )}
+                </div>
                   <div className="mt-4">
                     {station.streamUrl ? (
                       <div className="flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
@@ -240,10 +243,11 @@ export const StationDirectory: React.FC<StationDirectoryProps> = ({
                   <div className="mt-2 text-sm text-white/60">
                     Room ID: {room.roomId}
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.18em] text-white/40">
-                    <span>{room.region ?? 'unknown region'}</span>
-                    {room.toneId && <span>{room.toneId.replace('_', ' ')}</span>}
-                  </div>
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.18em] text-white/40">
+                  <span>{room.region ?? 'unknown region'}</span>
+                  {room.source && <span>{room.source}</span>}
+                  {room.toneId && <span>{room.toneId.replace('_', ' ')}</span>}
+                </div>
                   {active && room.frequency && (
                     <div className="mt-3 text-xs uppercase tracking-[0.2em] text-sky-200">
                       Tune to {room.frequency.toFixed(1)} MHz

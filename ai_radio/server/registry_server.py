@@ -38,6 +38,9 @@ ALLOWED_ORIGINS = parse_allowed_origins(os.environ.get('ALLOWED_ORIGINS', ''))
 def now_ms():
     return int(time.time() * 1000)
 
+def current_seed():
+    return time.strftime('%Y-%m-%d', time.gmtime())
+
 def telemetry_enabled():
     raw = os.environ.get('KEEGAN_TELEMETRY', '')
     return raw.lower() in ('1', 'true', 'yes', 'on')
@@ -219,6 +222,25 @@ class RoomStore:
             self.listeners.pop(room_id, None)
         return len(listeners)
 
+    def _assign_frequency(self, room_id):
+        import hashlib
+        min_freq = 87.0
+        max_freq = 108.0
+        step = 0.1
+        slots = int(round((max_freq - min_freq) / step)) + 1
+        digest = hashlib.sha1(room_id.encode('utf-8')).hexdigest()
+        index = int(digest[:8], 16) % slots
+        used = {}
+        for room in self.rooms.values():
+            freq = room.get('frequency')
+            if isinstance(freq, (int, float)) and freq > 0:
+                used[round(float(freq), 1)] = room.get('roomId')
+        for offset in range(slots):
+            freq = round(min_freq + ((index + offset) % slots) * step, 1)
+            if freq not in used or used[freq] == room_id:
+                return freq
+        return round(min_freq, 1)
+
     def list(self, region=None, app_key=None, tone_id=None):
         with self.lock:
             items = list(self.rooms.values())
@@ -253,7 +275,8 @@ class RoomStore:
             room['region'] = payload.get('region') or room.get('region') or DEFAULT_REGION
             room['appKey'] = payload.get('appKey') or room.get('appKey') or 'unknown'
             room['toneId'] = payload.get('toneId') or room.get('toneId') or 'default'
-            room['frequency'] = payload.get('frequency', room.get('frequency', 0))
+            if not room.get('frequency'):
+                room['frequency'] = self._assign_frequency(room_id)
             room['lastSeen'] = now_ms()
             self.rooms[room_id] = room
             self.save()
@@ -348,6 +371,10 @@ class RegistryHandler(BaseHTTPRequestHandler):
             tone_id = params.get('toneId', [None])[0]
             rooms = ROOMS.list(region=region, app_key=app_key, tone_id=tone_id)
             self._send_json(200, {'rooms': rooms})
+            return
+
+        if parsed.path == '/api/seed':
+            self._send_json(200, {'seed': current_seed(), 'tz': 'UTC'})
             return
 
         if parsed.path.startswith('/api/stations/'):

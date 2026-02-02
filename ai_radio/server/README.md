@@ -18,6 +18,7 @@ Set `KEEGAN_TELEMETRY=1` to enable `/api/telemetry` logging (writes JSONL to `se
 ## API
 - GET /api/stations
 - GET /api/rooms
+- GET /api/seed
 - POST /api/stations
 - POST /api/stations/<id>/heartbeat
 - POST /api/stations/<id>/listen

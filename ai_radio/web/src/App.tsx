@@ -1,13 +1,16 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { HUD, type LiveState } from './components/HUD';
 import { StationDirectory, type Station, type Room } from './components/StationDirectory';
 import { engine, type Mood } from './lib/AudioEngine';
 
-const REGISTRY_URL = import.meta.env.VITE_REGISTRY_URL || 'http://localhost:8090';
+const PUBLIC_REGISTRY_URL = import.meta.env.VITE_REGISTRY_URL || 'http://localhost:8090';
+const LOCAL_REGISTRY_URL = 'http://localhost:8090';
 const REGISTRY_KEY = import.meta.env.VITE_REGISTRY_KEY || '';
 const BRIDGE_KEY = import.meta.env.VITE_BRIDGE_KEY || '';
 const BRIDGE_URL = import.meta.env.VITE_BRIDGE_URL || 'http://localhost:3000';
 const REGISTRY_TIMEOUT_MS = 7000;
+
+type RegistrySource = 'public' | 'local' | 'custom' | 'mixed';
 
 type BroadcastStatus = {
   broadcasting: boolean;
@@ -201,6 +204,8 @@ function App() {
     version?: string;
     time?: string;
   }>({ status: 'checking' });
+  const [registrySource, setRegistrySource] = useState<RegistrySource>('public');
+  const [customRegistryUrl, setCustomRegistryUrl] = useState('');
   const [region, setRegion] = useState('us-midwest');
   const [query, setQuery] = useState('');
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
@@ -223,6 +228,27 @@ function App() {
   const hlsSequenceRef = useRef<number | null>(null);
   const hlsStaleRef = useRef(0);
 
+  const registryConfig = useMemo(() => {
+    const publicUrl = PUBLIC_REGISTRY_URL;
+    const localUrl = LOCAL_REGISTRY_URL;
+    const customUrl = customRegistryUrl.trim() || publicUrl;
+    if (registrySource === 'local') {
+      return { primaryUrl: localUrl, urls: [localUrl], publicUrl, localUrl, customUrl };
+    }
+    if (registrySource === 'custom') {
+      return { primaryUrl: customUrl, urls: [customUrl], publicUrl, localUrl, customUrl };
+    }
+    if (registrySource === 'mixed') {
+      const urls = [publicUrl, localUrl].filter((value, index, self) => self.indexOf(value) === index);
+      return { primaryUrl: publicUrl, urls, publicUrl, localUrl, customUrl };
+    }
+    return { primaryUrl: publicUrl, urls: [publicUrl], publicUrl, localUrl, customUrl };
+  }, [registrySource, customRegistryUrl]);
+
+  const telemetryRegistryUrl = useMemo(() => {
+    return registrySource === 'mixed' ? registryConfig.publicUrl : registryConfig.primaryUrl;
+  }, [registrySource, registryConfig]);
+
   // Listener identity for registry counts
   useEffect(() => {
     const stored = localStorage.getItem('keegan-listener-id');
@@ -236,6 +262,27 @@ function App() {
     listenerIdRef.current = generated;
     localStorage.setItem('keegan-listener-id', generated);
   }, []);
+
+  useEffect(() => {
+    const storedSource = localStorage.getItem('keegan-registry-source');
+    if (storedSource === 'public' || storedSource === 'local' || storedSource === 'custom' || storedSource === 'mixed') {
+      setRegistrySource(storedSource);
+    }
+    const storedCustom = localStorage.getItem('keegan-registry-custom');
+    if (storedCustom) {
+      setCustomRegistryUrl(storedCustom);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('keegan-registry-source', registrySource);
+  }, [registrySource]);
+
+  useEffect(() => {
+    if (customRegistryUrl) {
+      localStorage.setItem('keegan-registry-custom', customRegistryUrl);
+    }
+  }, [customRegistryUrl]);
 
   useEffect(() => {
     const stored = localStorage.getItem('keegan-session-id');
@@ -412,121 +459,183 @@ function App() {
     };
   }, []);
 
+  const fetchStationsFrom = useCallback(async (baseUrl: string, source: Station['source']) => {
+    const url = new URL('/api/stations', baseUrl);
+    if (region) url.searchParams.set('region', region);
+    const headers: Record<string, string> = {};
+    if (REGISTRY_KEY) headers['X-Api-Key'] = REGISTRY_KEY;
+    const attemptFetch = async () => {
+      const res = await fetchWithTimeout(url.toString(), { headers }, REGISTRY_TIMEOUT_MS);
+      if (!res.ok) {
+        const body = await res.text();
+        console.warn(`[registry] ${res.status} ${url.toString()} ${body}`);
+        throw new RegistryHttpError(res.status, body);
+      }
+      return res.json();
+    };
+    let data: any;
+    try {
+      data = await attemptFetch();
+    } catch (err) {
+      if (err instanceof RegistryHttpError) {
+        throw { kind: 'http', url: url.toString(), status: err.status, body: err.body } as RegistryFailure;
+      }
+      const failure = await classifyNetworkFailure(url.toString(), err);
+      if (failure.kind === 'timeout' || failure.kind === 'network') {
+        await sleep(500);
+        try {
+          data = await attemptFetch();
+        } catch (retryErr) {
+          if (retryErr instanceof RegistryHttpError) {
+            throw { kind: 'http', url: url.toString(), status: retryErr.status, body: retryErr.body } as RegistryFailure;
+          }
+          throw await classifyNetworkFailure(url.toString(), retryErr);
+        }
+      } else {
+        throw failure;
+      }
+    }
+    const nextStations: Station[] = (data.stations || []).map((station: Station) => ({
+      ...station,
+      source,
+    }));
+    return nextStations;
+  }, [region, REGISTRY_KEY]);
+
+  const fetchRoomsFrom = useCallback(async (baseUrl: string, source: Room['source']) => {
+    const url = new URL('/api/rooms', baseUrl);
+    if (region) url.searchParams.set('region', region);
+    const headers: Record<string, string> = {};
+    if (REGISTRY_KEY) headers['X-Api-Key'] = REGISTRY_KEY;
+    const attemptFetch = async () => {
+      const res = await fetchWithTimeout(url.toString(), { headers }, REGISTRY_TIMEOUT_MS);
+      if (!res.ok) {
+        const body = await res.text();
+        console.warn(`[registry] ${res.status} ${url.toString()} ${body}`);
+        throw new RegistryHttpError(res.status, body);
+      }
+      return res.json();
+    };
+    let data: any;
+    try {
+      data = await attemptFetch();
+    } catch (err) {
+      if (err instanceof RegistryHttpError) {
+        throw { kind: 'http', url: url.toString(), status: err.status, body: err.body } as RegistryFailure;
+      }
+      const failure = await classifyNetworkFailure(url.toString(), err);
+      if (failure.kind === 'timeout' || failure.kind === 'network') {
+        await sleep(500);
+        try {
+          data = await attemptFetch();
+        } catch (retryErr) {
+          if (retryErr instanceof RegistryHttpError) {
+            throw { kind: 'http', url: url.toString(), status: retryErr.status, body: retryErr.body } as RegistryFailure;
+          }
+          throw await classifyNetworkFailure(url.toString(), retryErr);
+        }
+      } else {
+        throw failure;
+      }
+    }
+    const nextRooms: Room[] = (data.rooms || []).map((room: Room) => ({
+      ...room,
+      source,
+    }));
+    return nextRooms;
+  }, [region, REGISTRY_KEY]);
+
   const fetchStations = useCallback(async () => {
     setRegistryLoading(true);
     setRegistryError(null);
-    try {
-      const url = new URL('/api/stations', REGISTRY_URL);
-      if (region) url.searchParams.set('region', region);
-      const headers: Record<string, string> = {};
-      if (REGISTRY_KEY) headers['X-Api-Key'] = REGISTRY_KEY;
-      const attemptFetch = async () => {
-        const res = await fetchWithTimeout(url.toString(), { headers }, REGISTRY_TIMEOUT_MS);
-        if (!res.ok) {
-          const body = await res.text();
-          console.warn(`[registry] ${res.status} ${url.toString()} ${body}`);
-          throw new RegistryHttpError(res.status, body);
-        }
-        return res.json();
-      };
-      let data: any;
-      try {
-        data = await attemptFetch();
-      } catch (err) {
-        if (err instanceof RegistryHttpError) {
-          throw { kind: 'http', url: url.toString(), status: err.status, body: err.body } as RegistryFailure;
-        }
-        const failure = await classifyNetworkFailure(url.toString(), err);
-        if (failure.kind === 'timeout' || failure.kind === 'network') {
-          await sleep(500);
-          try {
-            data = await attemptFetch();
-          } catch (retryErr) {
-            if (retryErr instanceof RegistryHttpError) {
-              throw { kind: 'http', url: url.toString(), status: retryErr.status, body: retryErr.body } as RegistryFailure;
-            }
-            throw await classifyNetworkFailure(url.toString(), retryErr);
-          }
-        } else {
-          throw failure;
-        }
+    const failures: RegistryFailure[] = [];
+    const results: Station[] = [];
+
+    const resolveSource = (url: string) => {
+      if (registrySource === 'mixed') return url === registryConfig.localUrl ? 'local' : 'public';
+      if (registrySource === 'custom') return 'custom';
+      return registrySource;
+    };
+
+    const settled = await Promise.allSettled(
+      registryConfig.urls.map((url) => fetchStationsFrom(url, resolveSource(url)))
+    );
+
+    settled.forEach((item) => {
+      if (item.status === 'fulfilled') {
+        results.push(...item.value);
+      } else {
+        failures.push(item.reason as RegistryFailure);
       }
-      const nextStations: Station[] = data.stations || [];
-      setStations(nextStations);
-      setSelectedStation((prev) => {
-        if (prev && nextStations.find((s) => s.id === prev.id)) return prev;
-        return nextStations[0] || null;
-      });
-    } catch (err) {
-      const fallback: RegistryFailure = { kind: 'network', url: REGISTRY_URL, detail: 'Unknown error' };
-      const failure = (err && typeof err === 'object' && 'kind' in err)
-        ? (err as RegistryFailure)
-        : fallback;
-      setRegistryError(registryErrorMessage(failure));
-    } finally {
-      setRegistryLoading(false);
+    });
+
+    const unique = new Map<string, Station>();
+    results.forEach((station) => {
+      if (!station.id) return;
+      if (!unique.has(station.id)) unique.set(station.id, station);
+    });
+    const nextStations = Array.from(unique.values());
+    setStations(nextStations);
+    setSelectedStation((prev) => {
+      if (prev && nextStations.find((s) => s.id === prev.id)) return prev;
+      return nextStations[0] || null;
+    });
+
+    if (failures.length > 0 && results.length === 0) {
+      setRegistryError(registryErrorMessage(failures[0]));
+    } else if (failures.length > 0) {
+      setRegistryError(`Partial registry: ${failures.map(registryErrorMessage).join(' | ')}`);
     }
-  }, [region, REGISTRY_URL, REGISTRY_KEY]);
+    setRegistryLoading(false);
+  }, [fetchStationsFrom, registryConfig, registrySource]);
 
   const fetchRooms = useCallback(async () => {
     setRoomsLoading(true);
     setRoomsError(null);
-    try {
-      const url = new URL('/api/rooms', REGISTRY_URL);
-      if (region) url.searchParams.set('region', region);
-      const headers: Record<string, string> = {};
-      if (REGISTRY_KEY) headers['X-Api-Key'] = REGISTRY_KEY;
-      const attemptFetch = async () => {
-        const res = await fetchWithTimeout(url.toString(), { headers }, REGISTRY_TIMEOUT_MS);
-        if (!res.ok) {
-          const body = await res.text();
-          console.warn(`[registry] ${res.status} ${url.toString()} ${body}`);
-          throw new RegistryHttpError(res.status, body);
-        }
-        return res.json();
-      };
-      let data: any;
-      try {
-        data = await attemptFetch();
-      } catch (err) {
-        if (err instanceof RegistryHttpError) {
-          throw { kind: 'http', url: url.toString(), status: err.status, body: err.body } as RegistryFailure;
-        }
-        const failure = await classifyNetworkFailure(url.toString(), err);
-        if (failure.kind === 'timeout' || failure.kind === 'network') {
-          await sleep(500);
-          try {
-            data = await attemptFetch();
-          } catch (retryErr) {
-            if (retryErr instanceof RegistryHttpError) {
-              throw { kind: 'http', url: url.toString(), status: retryErr.status, body: retryErr.body } as RegistryFailure;
-            }
-            throw await classifyNetworkFailure(url.toString(), retryErr);
-          }
-        } else {
-          throw failure;
-        }
+    const failures: RegistryFailure[] = [];
+    const results: Room[] = [];
+
+    const resolveSource = (url: string) => {
+      if (registrySource === 'mixed') return url === registryConfig.localUrl ? 'local' : 'public';
+      if (registrySource === 'custom') return 'custom';
+      return registrySource;
+    };
+
+    const settled = await Promise.allSettled(
+      registryConfig.urls.map((url) => fetchRoomsFrom(url, resolveSource(url)))
+    );
+
+    settled.forEach((item) => {
+      if (item.status === 'fulfilled') {
+        results.push(...item.value);
+      } else {
+        failures.push(item.reason as RegistryFailure);
       }
-      const nextRooms: Room[] = data.rooms || [];
-      setRooms(nextRooms);
-      setSelectedRoom((prev) => {
-        if (prev && nextRooms.find((r) => r.roomId === prev.roomId)) return prev;
-        return nextRooms[0] || null;
-      });
-    } catch (err) {
-      const fallback: RegistryFailure = { kind: 'network', url: REGISTRY_URL, detail: 'Unknown error' };
-      const failure = (err && typeof err === 'object' && 'kind' in err)
-        ? (err as RegistryFailure)
-        : fallback;
-      setRoomsError(registryErrorMessage(failure));
-    } finally {
-      setRoomsLoading(false);
+    });
+
+    const unique = new Map<string, Room>();
+    results.forEach((room) => {
+      if (!room.roomId) return;
+      if (!unique.has(room.roomId)) unique.set(room.roomId, room);
+    });
+    const nextRooms = Array.from(unique.values());
+    setRooms(nextRooms);
+    setSelectedRoom((prev) => {
+      if (prev && nextRooms.find((r) => r.roomId === prev.roomId)) return prev;
+      return nextRooms[0] || null;
+    });
+
+    if (failures.length > 0 && results.length === 0) {
+      setRoomsError(registryErrorMessage(failures[0]));
+    } else if (failures.length > 0) {
+      setRoomsError(`Partial registry: ${failures.map(registryErrorMessage).join(' | ')}`);
     }
-  }, [region, REGISTRY_URL, REGISTRY_KEY]);
+    setRoomsLoading(false);
+  }, [fetchRoomsFrom, registryConfig, registrySource]);
 
   const postTelemetry = useCallback(async (event: string, data?: Record<string, unknown>) => {
     try {
-      const url = new URL('/api/telemetry', REGISTRY_URL);
+      const url = new URL('/api/telemetry', telemetryRegistryUrl);
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (REGISTRY_KEY) headers['X-Api-Key'] = REGISTRY_KEY;
       await fetch(url.toString(), {
@@ -544,41 +653,50 @@ function App() {
     } catch {
       // best-effort only
     }
-  }, [REGISTRY_URL, REGISTRY_KEY, region]);
+  }, [telemetryRegistryUrl, REGISTRY_KEY, region]);
 
   const pingRegistryHealth = useCallback(async () => {
-    const url = new URL('/health', REGISTRY_URL);
     const headers: Record<string, string> = {};
     if (REGISTRY_KEY) headers['X-Api-Key'] = REGISTRY_KEY;
-    try {
-      const res = await fetchWithTimeout(url.toString(), { headers }, REGISTRY_TIMEOUT_MS);
-      if (!res.ok) {
-        const body = await res.text();
-        console.warn(`[registry] ${res.status} ${url.toString()} ${body}`);
-        throw new RegistryHttpError(res.status, body);
+
+    const ping = async (baseUrl: string) => {
+      const url = new URL('/health', baseUrl);
+      try {
+        const res = await fetchWithTimeout(url.toString(), { headers }, REGISTRY_TIMEOUT_MS);
+        if (!res.ok) {
+          const body = await res.text();
+          console.warn(`[registry] ${res.status} ${url.toString()} ${body}`);
+          throw new RegistryHttpError(res.status, body);
+        }
+        const data = await res.json();
+        return { ok: true, url: url.toString(), data };
+      } catch (err) {
+        if (err instanceof RegistryHttpError) {
+          return { ok: false, failure: { kind: 'http', url: url.toString(), status: err.status, body: err.body } as RegistryFailure };
+        }
+        const failure = await classifyNetworkFailure(url.toString(), err);
+        return { ok: false, failure };
       }
-      const data = await res.json();
+    };
+
+    const results = await Promise.all(registryConfig.urls.map((baseUrl) => ping(baseUrl)));
+    const firstOk = results.find((r) => r.ok) as { ok: true; url: string; data: any } | undefined;
+    if (firstOk) {
       setRegistryHealth({
         status: 'ok',
-        version: data.version ? String(data.version) : undefined,
-        time: data.time ? String(data.time) : undefined,
+        version: firstOk.data?.version ? String(firstOk.data.version) : undefined,
+        time: firstOk.data?.time ? String(firstOk.data.time) : undefined,
         failure: null,
       });
-      postTelemetry('registry_health_ok', { url: url.toString() });
-    } catch (err) {
-      if (err instanceof RegistryHttpError) {
-        setRegistryHealth({
-          status: 'error',
-          failure: { kind: 'http', url: url.toString(), status: err.status, body: err.body },
-        });
-        postTelemetry('registry_health_failed', { url: url.toString(), status: err.status });
-        return;
-      }
-      const failure = await classifyNetworkFailure(url.toString(), err);
-      setRegistryHealth({ status: 'error', failure });
-      postTelemetry('registry_health_failed', { url: url.toString(), reason: failure.kind });
+      postTelemetry('registry_health_ok', { url: firstOk.url, source: registrySource });
+      return;
     }
-  }, [REGISTRY_URL, REGISTRY_KEY, postTelemetry]);
+    const failure = results[0] && !results[0].ok ? (results[0] as any).failure : undefined;
+    if (failure) {
+      setRegistryHealth({ status: 'error', failure });
+      postTelemetry('registry_health_failed', { url: failure.url, reason: failure.kind, source: registrySource });
+    }
+  }, [registryConfig, registrySource, REGISTRY_KEY, postTelemetry]);
 
   useEffect(() => {
     fetchStations();
@@ -607,10 +725,17 @@ function App() {
     });
   }, [autoJoinGroup, autoJoinedRoom, rooms, selectedRoom, postTelemetry]);
 
-  const postListenerEvent = useCallback(async (stationId: string, action: 'join' | 'leave' | 'heartbeat') => {
+  const registryUrlForSource = useCallback((source?: string | null) => {
+    if (source === 'local') return registryConfig.localUrl;
+    if (source === 'public') return registryConfig.publicUrl;
+    if (source === 'custom') return registryConfig.customUrl;
+    return registryConfig.primaryUrl;
+  }, [registryConfig]);
+
+  const postListenerEvent = useCallback(async (stationId: string, action: 'join' | 'leave' | 'heartbeat', baseUrl?: string) => {
     if (!stationId) return;
     try {
-      const url = new URL(`/api/stations/${stationId}/listen`, REGISTRY_URL);
+      const url = new URL(`/api/stations/${stationId}/listen`, baseUrl || registryConfig.primaryUrl);
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (REGISTRY_KEY) headers['X-Api-Key'] = REGISTRY_KEY;
       await fetch(url.toString(), {
@@ -624,12 +749,12 @@ function App() {
     } catch {
       // best-effort only
     }
-  }, [REGISTRY_URL, REGISTRY_KEY]);
+  }, [registryConfig.primaryUrl, REGISTRY_KEY]);
 
-  const postRoomPresence = useCallback(async (roomId: string, action: 'join' | 'leave' | 'heartbeat', room?: Room | null) => {
+  const postRoomPresence = useCallback(async (roomId: string, action: 'join' | 'leave' | 'heartbeat', room?: Room | null, baseUrl?: string) => {
     if (!roomId) return;
     try {
-      const url = new URL(`/api/rooms/${roomId}/presence`, REGISTRY_URL);
+      const url = new URL(`/api/rooms/${roomId}/presence`, baseUrl || registryConfig.primaryUrl);
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (REGISTRY_KEY) headers['X-Api-Key'] = REGISTRY_KEY;
       await fetch(url.toString(), {
@@ -647,7 +772,7 @@ function App() {
     } catch {
       // best-effort only
     }
-  }, [REGISTRY_URL, REGISTRY_KEY, region]);
+  }, [registryConfig.primaryUrl, REGISTRY_KEY, region]);
 
   const bridgeHeaders = useCallback((extra?: Record<string, string>) => {
     const headers: Record<string, string> = { ...(extra ?? {}) };
@@ -793,35 +918,38 @@ function App() {
 
   useEffect(() => {
     if (!selectedStation?.id || !selectedStation.streamUrl || streamStatus !== 'playing') return;
-    postListenerEvent(selectedStation.id, 'join');
+    const baseUrl = registryUrlForSource(selectedStation.source);
+    postListenerEvent(selectedStation.id, 'join', baseUrl);
     const interval = window.setInterval(() => {
-      postListenerEvent(selectedStation.id, 'heartbeat');
+      postListenerEvent(selectedStation.id, 'heartbeat', baseUrl);
     }, 15000);
     return () => {
       window.clearInterval(interval);
-      postListenerEvent(selectedStation.id, 'leave');
+      postListenerEvent(selectedStation.id, 'leave', baseUrl);
     };
-  }, [selectedStation?.id, selectedStation?.streamUrl, streamStatus, postListenerEvent]);
+  }, [selectedStation?.id, selectedStation?.streamUrl, selectedStation?.source, streamStatus, postListenerEvent, registryUrlForSource]);
 
   useEffect(() => {
     if (!selectedStation?.id) return;
     postTelemetry('station_selected', {
       stationId: selectedStation.id,
       streamUrl: selectedStation.streamUrl,
+      source: selectedStation.source,
     });
-  }, [selectedStation?.id, selectedStation?.streamUrl, postTelemetry]);
+  }, [selectedStation?.id, selectedStation?.streamUrl, selectedStation?.source, postTelemetry]);
 
   useEffect(() => {
     if (!selectedRoom?.roomId) return;
-    postRoomPresence(selectedRoom.roomId, 'join', selectedRoom);
+    const baseUrl = registryUrlForSource(selectedRoom.source);
+    postRoomPresence(selectedRoom.roomId, 'join', selectedRoom, baseUrl);
     const interval = window.setInterval(() => {
-      postRoomPresence(selectedRoom.roomId, 'heartbeat', selectedRoom);
+      postRoomPresence(selectedRoom.roomId, 'heartbeat', selectedRoom, baseUrl);
     }, 15000);
     return () => {
       window.clearInterval(interval);
-      postRoomPresence(selectedRoom.roomId, 'leave', selectedRoom);
+      postRoomPresence(selectedRoom.roomId, 'leave', selectedRoom, baseUrl);
     };
-  }, [selectedRoom?.roomId, postRoomPresence]);
+  }, [selectedRoom?.roomId, selectedRoom?.source, postRoomPresence, registryUrlForSource]);
 
   useEffect(() => {
     if (!selectedRoom?.roomId) return;
@@ -830,8 +958,9 @@ function App() {
       appKey: selectedRoom.appKey,
       toneId: selectedRoom.toneId,
       frequency: selectedRoom.frequency,
+      source: selectedRoom.source,
     });
-  }, [selectedRoom?.roomId, selectedRoom?.appKey, selectedRoom?.toneId, selectedRoom?.frequency, postTelemetry]);
+  }, [selectedRoom?.roomId, selectedRoom?.appKey, selectedRoom?.toneId, selectedRoom?.frequency, selectedRoom?.source, postTelemetry]);
 
   useEffect(() => {
     if (!audioRef.current) return;
@@ -913,6 +1042,10 @@ function App() {
   const hlsWindow = typeof hlsHealth.windowSeconds === 'number'
     ? formatDurationMs(hlsHealth.windowSeconds * 1000)
     : null;
+  const registryLabel = registrySource === 'mixed'
+    ? `${registryConfig.publicUrl} + ${registryConfig.localUrl}`
+    : registryConfig.primaryUrl;
+  const registryHref = registrySource === 'mixed' ? registryConfig.publicUrl : registryConfig.primaryUrl;
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#05070d] text-white">
@@ -934,9 +1067,28 @@ function App() {
             <div className="text-xs uppercase tracking-[0.3em] text-white/40">Keegan</div>
             <h1 className="mt-2 text-3xl font-semibold">Radioverse Console</h1>
           </div>
-          <div className="text-xs uppercase tracking-[0.2em] text-white/50">
-            Registry: <a className="text-white/70 hover:text-white" href={REGISTRY_URL} target="_blank" rel="noreferrer">{REGISTRY_URL}</a>
-            <span className="ml-2 inline-flex items-center gap-1 text-[10px]">
+          <div className="flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/50">
+            <span>Registry:</span>
+            <a className="text-white/70 hover:text-white" href={registryHref} target="_blank" rel="noreferrer">{registryLabel}</a>
+            <select
+              value={registrySource}
+              onChange={(e) => setRegistrySource(e.target.value as RegistrySource)}
+              className="h-8 rounded-full border border-white/10 bg-white/5 px-3 text-[10px] text-white/70 focus:border-amber-400/60 focus:outline-none"
+            >
+              <option value="public">public</option>
+              <option value="local">local</option>
+              <option value="mixed">mixed</option>
+              <option value="custom">custom</option>
+            </select>
+            {registrySource === 'custom' && (
+              <input
+                value={customRegistryUrl}
+                onChange={(e) => setCustomRegistryUrl(e.target.value)}
+                placeholder="https://registry.example.com"
+                className="h-8 w-64 rounded-full border border-white/10 bg-white/5 px-3 text-[10px] text-white/70 placeholder:text-white/30 focus:border-sky-400/60 focus:outline-none"
+              />
+            )}
+            <span className="inline-flex items-center gap-1 text-[10px]">
               <span
                 className={`h-2 w-2 rounded-full ${
                   registryHealth.status === 'ok'
@@ -949,10 +1101,10 @@ function App() {
               {registryHealth.status === 'ok' ? 'online' : registryHealth.status === 'checking' ? 'checking' : registryHealthLabel(registryHealth.failure)}
             </span>
             {registryHealth.status === 'ok' && registryHealth.version && (
-              <span className="ml-2 text-[10px] text-white/40">v{registryHealth.version}</span>
+              <span className="text-[10px] text-white/40">v{registryHealth.version}</span>
             )}
             {registryHealth.status === 'error' && registryHealth.failure && (
-              <span className="ml-2 text-[10px] text-red-200">
+              <span className="text-[10px] text-red-200">
                 {registryErrorMessage(registryHealth.failure)}
               </span>
             )}

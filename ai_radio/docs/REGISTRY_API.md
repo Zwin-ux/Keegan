@@ -27,6 +27,13 @@ Query params:
 Response fields include:
 - `listenerCount` (active listeners in last 30s)
 
+### GET /api/seed
+Returns the current global room seed (UTC) so clients do not rely on local clocks.
+Response:
+```
+{ "seed": "2026-02-02", "tz": "UTC" }
+```
+
 ### POST /api/stations
 Upserts a station record. Used by the EXE heartbeat.
 Example payload:
