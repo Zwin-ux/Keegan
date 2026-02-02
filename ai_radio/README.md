@@ -2,24 +2,13 @@
 
 ![Keegan glyph](assets/logo.png)
 
-Frequency is the listener-facing name for Keegan — a tray-first local radio engine that weaves moods instead of playlists. It lives in the Windows system tray, runs offline, and drifts through recipes of stems, procedural synth, and tiny whispered stories.
+Frequency is the listener-facing name for Keenga — a tray-first local radio engine that weaves moods instead of playlists. It lives in the Windows system tray, runs offline, and drifts through stems, procedural synth, and tiny whispered stories.
 
-Website (local registry UI): http://localhost:8090/
+Website (local registry UI): http://localhost:8090/  
 Website (production): TBD
 
-## Aesthetic (Alpha)
-- Tray icon uses the glyph; pulse rate = energy; mood colors: Focus amber, Rain blue, Arcade neon magenta, Sleep indigo.
-- Audio feel: smooth equal-power fades, quiet micro-stories with ducking, light plate reverb (low-cut), no clipping (soft limiter).
-- Mood textures: Focus (ticks/wood/paper), Rain (water/air/stone), Arcade (muted bass + bleeps), Sleep (engine/hiss/creaks).
-
-## What it does
-- Tray controls: play/pause, intensity, mood select (Focus Room, Rain Cave, Arcade Night, Sleep Ship).
-- Mood brain: state machine with smooth transitions, personality drift over days, and active-app weighting (IDE biases focus, games bias arcade, media/idle bias sleep/rain).
-- Audio engine: miniaudio-based mixer with layer scheduler, gentle crossfades, per-layer filters, ducked TTS/voice bus, and lightweight plate-style reverb.
-- Content: bundled stems plus procedural synth; micro-stories come from a prewritten list for MVP.
-
-## Startup guide (the “get signal fast” version)
-This is the path I use when I want the room to go live in under 10 minutes.
+## Start here (5 minutes)
+This is the shortest path from zero to sound.
 
 1) **Start the registry (the directory).**
 ```bash
@@ -34,33 +23,79 @@ cd ai_radio/web
 npm install
 npm run dev
 ```
-Open: http://localhost:5173/  
-You should see the “Regional Directory” panel populate once the registry is online.
+Open: http://localhost:5173/
 
-3) **Build + run the engine.**
+3) **Build + run the engine (the EXE).**
 ```bash
 cd ai_radio
 cmake -S . -B build
 cmake --build build --config Release
 ```
-Run the EXE from the repo root so it can serve `web/dist`:
+Run from the repo root so it can serve `web/dist`:
 ```
 ai_radio/build/Release/keegan_patched.exe
 ```
 
 4) **If the directory doesn’t load:**
-- Check that http://localhost:8090/health returns `{ ok: true, ... }`.
-- Make sure the registry allows your UI origin (see `ALLOWED_ORIGINS` in `server/README.md`).
-- The UI now shows the exact failure reason next to the REGISTRY label.
+- Check http://localhost:8090/health returns `{ ok: true, ... }`.
+- Make sure the registry allows your UI origin (`ALLOWED_ORIGINS` in `server/README.md`).
+- The UI shows the exact failure reason next to the REGISTRY label.
+
+## What it does
+- Tray controls: play/pause, intensity, mood select (Focus Room, Rain Cave, Arcade Night, Sleep Ship).
+- Mood brain: state machine with smooth transitions, personality drift over days, active‑app weighting (IDE biases focus, games bias arcade, media/idle bias sleep/rain).
+- Audio engine: miniaudio-based mixer with layer scheduler, gentle crossfades, per-layer filters, ducked TTS/voice bus, and lightweight plate-style reverb.
+- Content: bundled stems plus procedural synth; micro-stories come from a prewritten list for MVP.
+
+## Host a station (local)
+If you want to broadcast your own “frequency”:
+- Use the **Ingest Control** panel in the web console to generate a token.
+- Point your RTMP encoder at the token URL (see `server/ingest/README.md`).
+- Your station appears in the registry directory when the EXE is online.
+
+## Telemetry (opt‑in)
+Telemetry is **off by default**.
+- EXE: set `KEEGAN_TELEMETRY=1` to log JSONL to `cache/telemetry.jsonl`.
+- Registry: set `KEEGAN_TELEMETRY=1` to log JSONL to `server/data/telemetry-YYYY-MM-DD.jsonl`.
+
+Quick summary:
+```bash
+python ai_radio/tools/telemetry_summary.py
+```
 
 ## Open source and modding
-- Keegan is designed as a moddable radio engine. Frequency packs can replace moods, stems, and tuning curves.
+- Keenga is designed as a moddable radio engine. Frequency packs can replace moods, stems, and tuning curves.
 - See `docs/MODDING_GUIDE.md` and `mods/example_neon` for the pack format.
 
 ## Security
 - Set `KEEGAN_BRIDGE_KEY` to protect local POST endpoints.
 - Set `KEEGAN_BROADCAST_SECRET` to sign per-station ingest tokens (defaults to bridge key).
 - Set `KEEGAN_REGISTRY_KEY` to protect registry POST endpoints.
+
+## Config knobs (quick)
+- Web UI: `VITE_REGISTRY_URL` (default `http://localhost:8090`), `VITE_REGISTRY_KEY` (optional), `VITE_BRIDGE_URL` (default `http://localhost:3000`), `VITE_BRIDGE_KEY` (optional)
+- Registry: `ALLOWED_ORIGINS` (comma-separated, default allows localhost ports), `KEEGAN_TELEMETRY=1` (enable JSONL telemetry logging)
+
+## Repo map
+- `assets/` - logo and bundled stems/tones (includes Sleep Ship placeholders and synth preset).
+- `config/` - mood pack JSON including Sleep Ship.
+- `src/` - Keenga C++ sources (brain, DSP, state machine).
+- `web/` - Radioverse Console UI.
+- `server/` - station registry service + minimal directory UI.
+- `docs/` - specs and platform docs.
+- `mods/` - frequency packs (modding).
+
+## Product specs
+- `docs/RADIOVERSE_SPEC.md` - full platform vision and architecture.
+- `docs/LOCAL_BRIDGE_API.md` - local API between EXE and web.
+- `docs/REGISTRY_API.md` - station registry API and directory.
+- `docs/STATION_HOSTING_SPEC.md` - how to host a station and join the directory.
+- `docs/ROADMAP.md` - milestones for shipping the platform.
+
+## Design notes (alpha)
+- Aesthetic: Focus amber, Rain blue, Arcade neon magenta, Sleep indigo.
+- Audio feel: smooth equal‑power fades, quiet micro‑stories with ducking, light plate reverb (low‑cut), no clipping (soft limiter).
+- Mood textures: Focus (ticks/wood/paper), Rain (water/air/stone), Arcade (muted bass + bleeps), Sleep (engine/hiss/creaks).
 
 ## Density curves (per mood)
 - Focus Room: slow S-curve (0.35 -> 0.55) with tiny +/-0.05 wobble every ~90s.
@@ -72,58 +107,8 @@ ai_radio/build/Release/keegan_patched.exe
 - Reverb: light plate/FDN hybrid, pre-delay 20-60ms, damped high shelf, modulated decay; wet mapped to warmth/tension per mood.
 - Ducking: sidechain compressor keyed by voice/TTS bus; attack 10-20ms, release 300-500ms, gentle ratio ~2.5:1.
 - Crossfades: equal-power fades for swaps and tempo-aware loop points; keep tails to avoid holes during transitions.
-- Filters: per-layer LP/HP biquads with smoothed parameter ramps to avoid zipper noise.
 
 ## Inputs the brain watches
 - Time of day, keyboard/mouse intensity, user intensity slider.
 - Foreground app heuristics: regex table -> mood/energy biases, evaluated every few seconds with smoothing.
 - Random seeds to keep recipes alive and allow rare surprises.
-
-## Repo layout
-- `assets/` - logo and bundled stems/tones (includes Sleep Ship placeholders and synth preset).
-- `assets/tray_colors.json` - tray color/pulse config (Amber/Blue/Neon Magenta/Indigo).
-- `src/` - Keegan C++ sources (brain, DSP, state machine).
-- `vendor/` - `miniaudio.h`, `vjson/` for config loading.
-- `config/` - mood pack JSON including Sleep Ship.
-- `config/station.json` - local station metadata and registry URL.
-- `mods/` - frequency packs (modding).
-- `docs/` - specs and platform docs.
-- `server/` - station registry service + minimal directory UI.
-- `llm_router/` - co-located LLM router project (from sibling repo) for optional AI worker.
-- `DESIGN.md` - concept and system design.
-- `implementation_plan.md` - phased build checklist.
-
-## Product specs
-- `docs/RADIOVERSE_SPEC.md` - full platform vision and architecture.
-- `docs/LOCAL_BRIDGE_API.md` - local API between EXE and web.
-- `docs/REGISTRY_API.md` - station registry API and directory.
-- `docs/STATION_HOSTING_SPEC.md` - how to host a station and join the directory.
-- `docs/ROADMAP.md` - milestones for shipping the platform.
-
-## Build (desktop)
-```bash
-cd ai_radio
-cmake -S . -B build
-cmake --build build --config Release
-```
-Run the demo: `./build/keegan` (prints simulated RMS and heuristic-driven mood changes). Replace stems/presets under `assets/` with real audio for production.
-
-## Web UI
-```bash
-cd ai_radio/web
-npm install
-npm run dev
-```
-Default dev URL: http://localhost:5173/
-Env overrides:
-- `VITE_REGISTRY_URL` (registry base URL)
-- `VITE_REGISTRY_KEY` (optional, if registry requires auth)
-- `VITE_BRIDGE_URL` (local bridge base URL, default `http://localhost:3000`)
-- `VITE_BRIDGE_KEY` (optional, if bridge requires WS/auth)
-- `REGISTRY_URL` (used by `npm run check:registry`, defaults to `http://localhost:8090`)
-
-## Ingest (local dev)
-See `ai_radio/server/ingest/README.md` for MediaMTX setup.
-
-## Notes on LLM router
-`llm_router/` is copied in for a future offline worker (e.g., micro-story generation). It builds as its own target via the nested `CMakeLists.txt`.

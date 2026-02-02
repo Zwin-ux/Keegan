@@ -38,6 +38,28 @@ ALLOWED_ORIGINS = parse_allowed_origins(os.environ.get('ALLOWED_ORIGINS', ''))
 def now_ms():
     return int(time.time() * 1000)
 
+def telemetry_enabled():
+    raw = os.environ.get('KEEGAN_TELEMETRY', '')
+    return raw.lower() in ('1', 'true', 'yes', 'on')
+
+
+def telemetry_path():
+    stamp = time.strftime('%Y-%m-%d')
+    return os.path.join(DATA_DIR, f"telemetry-{stamp}.jsonl")
+
+
+def append_telemetry(event):
+    if not telemetry_enabled():
+        return False
+    if not isinstance(event, dict):
+        return False
+    if 'ts' not in event:
+        event['ts'] = now_ms()
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(telemetry_path(), 'a', encoding='utf-8') as f:
+        f.write(json.dumps(event) + '\n')
+    return True
+
 
 class StationStore:
     def __init__(self):
@@ -366,6 +388,13 @@ class RegistryHandler(BaseHTTPRequestHandler):
                 self._send_json(400, {'error': 'invalid_json'})
                 return
             station = STORE.upsert(payload)
+            append_telemetry({
+                'event': 'station_update',
+                'stationId': station.get('id'),
+                'region': station.get('region'),
+                'status': station.get('status'),
+                'broadcasting': station.get('broadcasting'),
+            })
             self._send_json(200, station)
             return
 
@@ -398,6 +427,12 @@ class RegistryHandler(BaseHTTPRequestHandler):
             if not result:
                 self._send_json(404, {'error': 'not_found'})
                 return
+            if action in ('join', 'leave'):
+                append_telemetry({
+                    'event': 'listener_' + action,
+                    'stationId': station_id,
+                    'listenerId': result.get('listenerId'),
+                })
             self._send_json(200, result)
             return
 
@@ -416,7 +451,28 @@ class RegistryHandler(BaseHTTPRequestHandler):
             if not result:
                 self._send_json(404, {'error': 'not_found'})
                 return
+            append_telemetry({
+                'event': 'room_presence',
+                'roomId': room_id,
+                'region': payload.get('region'),
+                'appKey': payload.get('appKey'),
+                'toneId': payload.get('toneId'),
+                'action': payload.get('action', 'join'),
+                'listenerId': result.get('listenerId'),
+            })
             self._send_json(200, result)
+            return
+
+        if parsed.path == '/api/telemetry':
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length) if length > 0 else b'{}'
+            try:
+                payload = json.loads(body.decode('utf-8'))
+            except Exception:
+                self._send_json(400, {'error': 'invalid_json'})
+                return
+            stored = append_telemetry(payload)
+            self._send_json(200, {'ok': True, 'stored': stored})
             return
 
         self._send_json(404, {'error': 'not_found'})

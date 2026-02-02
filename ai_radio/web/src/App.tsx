@@ -208,6 +208,9 @@ function App() {
   const [streamStatus, setStreamStatus] = useState<'idle' | 'playing' | 'paused' | 'error'>('idle');
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const listenerIdRef = useRef<string>('');
+  const sessionIdRef = useRef<string>('');
+  const [autoJoinGroup, setAutoJoinGroup] = useState<'auto' | 'manual'>('manual');
+  const [autoJoinedRoom, setAutoJoinedRoom] = useState(false);
 
   const [broadcastStatus, setBroadcastStatus] = useState<BroadcastStatus | null>(null);
   const [broadcastToken, setBroadcastToken] = useState('');
@@ -232,6 +235,30 @@ function App() {
       : `listener_${Date.now()}_${Math.random().toString(16).slice(2)}`;
     listenerIdRef.current = generated;
     localStorage.setItem('keegan-listener-id', generated);
+  }, []);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('keegan-session-id');
+    if (stored) {
+      sessionIdRef.current = stored;
+      return;
+    }
+    const generated = (typeof window !== 'undefined' && window.crypto && 'randomUUID' in window.crypto)
+      ? window.crypto.randomUUID()
+      : `session_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    sessionIdRef.current = generated;
+    localStorage.setItem('keegan-session-id', generated);
+  }, []);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('keegan-ab-autojoin');
+    if (stored === 'auto' || stored === 'manual') {
+      setAutoJoinGroup(stored);
+      return;
+    }
+    const assigned = Math.random() < 0.5 ? 'auto' : 'manual';
+    localStorage.setItem('keegan-ab-autojoin', assigned);
+    setAutoJoinGroup(assigned);
   }, []);
 
   // Unlock audio context on first interaction
@@ -497,6 +524,28 @@ function App() {
     }
   }, [region, REGISTRY_URL, REGISTRY_KEY]);
 
+  const postTelemetry = useCallback(async (event: string, data?: Record<string, unknown>) => {
+    try {
+      const url = new URL('/api/telemetry', REGISTRY_URL);
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (REGISTRY_KEY) headers['X-Api-Key'] = REGISTRY_KEY;
+      await fetch(url.toString(), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          event,
+          ts: Date.now(),
+          source: 'web',
+          sessionId: sessionIdRef.current,
+          region,
+          ...(data ?? {}),
+        }),
+      });
+    } catch {
+      // best-effort only
+    }
+  }, [REGISTRY_URL, REGISTRY_KEY, region]);
+
   const pingRegistryHealth = useCallback(async () => {
     const url = new URL('/health', REGISTRY_URL);
     const headers: Record<string, string> = {};
@@ -515,18 +564,21 @@ function App() {
         time: data.time ? String(data.time) : undefined,
         failure: null,
       });
+      postTelemetry('registry_health_ok', { url: url.toString() });
     } catch (err) {
       if (err instanceof RegistryHttpError) {
         setRegistryHealth({
           status: 'error',
           failure: { kind: 'http', url: url.toString(), status: err.status, body: err.body },
         });
+        postTelemetry('registry_health_failed', { url: url.toString(), status: err.status });
         return;
       }
       const failure = await classifyNetworkFailure(url.toString(), err);
       setRegistryHealth({ status: 'error', failure });
+      postTelemetry('registry_health_failed', { url: url.toString(), reason: failure.kind });
     }
-  }, [REGISTRY_URL, REGISTRY_KEY]);
+  }, [REGISTRY_URL, REGISTRY_KEY, postTelemetry]);
 
   useEffect(() => {
     fetchStations();
@@ -538,6 +590,22 @@ function App() {
     }, 15000);
     return () => window.clearInterval(interval);
   }, [fetchStations, fetchRooms, pingRegistryHealth]);
+
+  useEffect(() => {
+    if (autoJoinGroup !== 'auto') return;
+    if (autoJoinedRoom) return;
+    if (selectedRoom || rooms.length === 0) return;
+    const room = rooms[0];
+    setSelectedRoom(room);
+    setAutoJoinedRoom(true);
+    postTelemetry('room_auto_join', {
+      roomId: room.roomId,
+      appKey: room.appKey,
+      toneId: room.toneId,
+      frequency: room.frequency,
+      group: autoJoinGroup,
+    });
+  }, [autoJoinGroup, autoJoinedRoom, rooms, selectedRoom, postTelemetry]);
 
   const postListenerEvent = useCallback(async (stationId: string, action: 'join' | 'leave' | 'heartbeat') => {
     if (!stationId) return;
@@ -557,6 +625,29 @@ function App() {
       // best-effort only
     }
   }, [REGISTRY_URL, REGISTRY_KEY]);
+
+  const postRoomPresence = useCallback(async (roomId: string, action: 'join' | 'leave' | 'heartbeat', room?: Room | null) => {
+    if (!roomId) return;
+    try {
+      const url = new URL(`/api/rooms/${roomId}/presence`, REGISTRY_URL);
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (REGISTRY_KEY) headers['X-Api-Key'] = REGISTRY_KEY;
+      await fetch(url.toString(), {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          listenerId: listenerIdRef.current,
+          action,
+          region: room?.region || region,
+          appKey: room?.appKey,
+          toneId: room?.toneId,
+          frequency: room?.frequency,
+        }),
+      });
+    } catch {
+      // best-effort only
+    }
+  }, [REGISTRY_URL, REGISTRY_KEY, region]);
 
   const bridgeHeaders = useCallback((extra?: Record<string, string>) => {
     const headers: Record<string, string> = { ...(extra ?? {}) };
@@ -711,6 +802,36 @@ function App() {
       postListenerEvent(selectedStation.id, 'leave');
     };
   }, [selectedStation?.id, selectedStation?.streamUrl, streamStatus, postListenerEvent]);
+
+  useEffect(() => {
+    if (!selectedStation?.id) return;
+    postTelemetry('station_selected', {
+      stationId: selectedStation.id,
+      streamUrl: selectedStation.streamUrl,
+    });
+  }, [selectedStation?.id, selectedStation?.streamUrl, postTelemetry]);
+
+  useEffect(() => {
+    if (!selectedRoom?.roomId) return;
+    postRoomPresence(selectedRoom.roomId, 'join', selectedRoom);
+    const interval = window.setInterval(() => {
+      postRoomPresence(selectedRoom.roomId, 'heartbeat', selectedRoom);
+    }, 15000);
+    return () => {
+      window.clearInterval(interval);
+      postRoomPresence(selectedRoom.roomId, 'leave', selectedRoom);
+    };
+  }, [selectedRoom?.roomId, postRoomPresence]);
+
+  useEffect(() => {
+    if (!selectedRoom?.roomId) return;
+    postTelemetry('room_selected', {
+      roomId: selectedRoom.roomId,
+      appKey: selectedRoom.appKey,
+      toneId: selectedRoom.toneId,
+      frequency: selectedRoom.frequency,
+    });
+  }, [selectedRoom?.roomId, selectedRoom?.appKey, selectedRoom?.toneId, selectedRoom?.frequency, postTelemetry]);
 
   useEffect(() => {
     if (!audioRef.current) return;
@@ -1040,8 +1161,18 @@ function App() {
                   controls
                   className="w-full"
                   crossOrigin="anonymous"
-                  onPause={() => setStreamStatus('paused')}
-                  onPlay={() => setStreamStatus('playing')}
+                  onPause={() => {
+                    setStreamStatus('paused');
+                    if (selectedStation?.id) {
+                      postTelemetry('playback_stop', { stationId: selectedStation.id });
+                    }
+                  }}
+                  onPlay={() => {
+                    setStreamStatus('playing');
+                    if (selectedStation?.id) {
+                      postTelemetry('playback_start', { stationId: selectedStation.id });
+                    }
+                  }}
                   onError={() => setStreamStatus('error')}
                 />
                 {selectedStation && !selectedStation.streamUrl && (

@@ -210,3 +210,106 @@ We need better system prompts for the `llm_router` to generate distinct voices p
 1.  **Web**: Implement the **QR Code / Share** modal. It's high impact, low effort.
 2.  **C++**: Implement **Binary Audio Download** in `StoryGenerator` to make the AI voice real.
 3.  **Content**: Author 3 distinct system prompts for the `llm_router` config.
+
+---
+
+# Data + Tests Focused Update Plan
+
+Goal: Make the next update measurable and repeatable. We should only ship changes that clearly improve retention, listening time, or successful hosting — and prove it with tests + telemetry.
+
+## 1) Define the single “north star” metric
+Pick one for the next release so we don’t overfit:
+- **30‑minute retention** (best for vibe engines)
+- **avg listening session length**
+- **successful host rate** (people who get a live stream working)
+
+## 2) Instrument the product (minimal but meaningful)
+Add telemetry events in three surfaces: EXE, registry, web.
+
+### EXE (local)
+- `engine_start`
+- `mood_change`
+- `app_focus_change` (app_key only)
+- `room_join`
+- `room_leave`
+- `broadcast_start`
+- `broadcast_stop`
+- `ingest_error`
+
+### Registry
+- `station_update`
+- `listener_join`
+- `listener_leave`
+- `room_presence`
+
+### Web
+- `registry_health_ok/failed`
+- `station_selected`
+- `room_selected`
+- `playback_start/stop`
+
+**Data shape** (all events):
+```
+event: "room_join"
+ts: 1738420000000
+region: "us-midwest"
+sessionId: "sess_123"
+roomId: "us-midwest|code|focus_room|2026-02-01"
+appKey: "code"
+toneId: "focus_room"
+```
+
+## 3) Store it somewhere simple (MVP)
+- **Local JSONL** for EXE (append‑only in `cache/telemetry.jsonl`)
+- **Registry memory + daily JSON dump** for server (`data/telemetry-YYYY-MM-DD.json`)
+- Optionally forward to a hosted endpoint later.
+
+## 4) Tests that protect the metrics
+Only add tests that directly protect the “north star”.
+
+### Unit tests
+- **Room frequency hash** is stable (same input → same frequency).
+- **Room presence TTL** (no heartbeat → listener expires).
+- **Token validation** (station-bound tokens reject cross‑station reuse).
+
+### Integration tests
+- **Registry health** returns `{ ok: true }`.
+- **Station list** returns non-empty after an EXE heartbeat.
+- **Room list** returns after presence posts.
+
+### UI tests (smoke)
+- Web UI renders stations if registry is up.
+- Error banner shows exact failure type if registry is down.
+
+## 5) Data‑driven change proposal (first update)
+Focus on one change likely to move the north star. Example:
+
+### Change: “Auto‑Join Rooms by App”
+- Hypothesis: auto‑join increases session length because users feel passive co‑presence.
+- Metric: avg listening session length.
+- Experiment: random 50% auto‑join, 50% manual.
+- Success: +15% session length or +10% retention.
+
+## 6) Report after the release
+Write a 1‑page internal post:
+- What was shipped
+- Hypothesis
+- Actual metric movement
+- Rollback / keep decision
+
+## 7) Concrete sprint plan (2 weeks)
+**Week 1**
+- Add telemetry schema + local JSONL writer in EXE.
+- Add `/api/telemetry` in registry (write to JSON file).
+- Add test harness for registry (health + rooms).
+
+**Week 2**
+- Add A/B flag for auto‑join rooms.
+- Add UI indicator (“Auto‑joined to Focus Room”).
+- Read telemetry and compute metric deltas.
+
+## 8) Deliverables checklist
+- [ ] Telemetry events logged locally and in registry
+- [ ] Unit tests for hashing + TTL + token validation
+- [ ] Integration tests for registry endpoints
+- [ ] A/B flag implementation and simple report

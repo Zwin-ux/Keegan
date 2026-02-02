@@ -2,6 +2,7 @@
 #include "../../vendor/httplib.h"
 #include "../../vendor/vjson/vjson.h"
 #include "../util/logger.h"
+#include "../util/telemetry.h"
 #include <filesystem>
 #include <sstream>
 #include <fstream>
@@ -640,6 +641,10 @@ void WebServer::run() {
             std::lock_guard<std::mutex> lock(stationMutex_);
             stationConfig_.streamUrl = streamUrl;
         }
+        util::Telemetry::instance().record("broadcast_start", {
+            {"stationId", stationId_},
+            {"sessionId", broadcastSessionId_}
+        });
         std::stringstream ss;
         ss << "{";
         ss << "\"broadcasting\":true,";
@@ -689,6 +694,10 @@ void WebServer::run() {
             addCors(res);
             return;
         }
+        util::Telemetry::instance().record("broadcast_stop", {
+            {"stationId", stationId_},
+            {"sessionId", broadcastSessionId_}
+        });
         res.set_content("{\"broadcasting\":false}", "application/json");
         addCors(res);
     });

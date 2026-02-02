@@ -27,7 +27,9 @@ try {
   const health = await check('/health');
   await sleep(200);
   const stations = await check('/api/stations');
+  const rooms = await check('/api/rooms');
   console.log('[registry] ok', { baseUrl, health, stationCount: stations.stations?.length ?? 0 });
+  console.log('[registry] rooms', { roomCount: rooms.rooms?.length ?? 0 });
   process.exit(0);
 } catch (err) {
   console.error('[registry] failed', err?.message || err);

@@ -24,6 +24,7 @@ set(KEEGAN_SOURCES
     src/ui/ws_server.cpp
     src/util/logger.cpp
     src/util/platform.cpp
+    src/util/telemetry.cpp
     src/brain/app_heuristics.cpp
     src/brain/state_machine.cpp
     src/brain/story_generator.cpp

@@ -1,5 +1,5 @@
 import React from 'react';
-import QRCode from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 import './ShareModal.css';
 
 interface ShareModalProps {
@@ -26,7 +26,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ onClose, url }) => {
         <div className="modal-body">
           <p>Scan this QR code with your phone to control the station remotely.</p>
           <div className="qr-code-container">
-            <QRCode value={url} size={256} />
+            <QRCodeCanvas value={url} size={256} />
           </div>
           <p>Or use this URL on your local network:</p>
           <div className="url-container">

@@ -3,6 +3,7 @@
 .DS_Store
 *.log
 build_log.txt
+**/__pycache__/
 
 # Node
 **/node_modules/
@@ -13,6 +14,7 @@ build_log.txt
 ai_radio/build/
 ai_radio/cache/
 ai_radio/llm_router/build/
+ai_radio/server/data/
 **/CMakeFiles/
 **/CMakeCache.txt
 **/*.sln

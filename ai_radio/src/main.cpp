@@ -5,6 +5,7 @@
 #include "ui/web_server.h"
 #include "util/logger.h"
 #include "util/platform.h"
+#include "util/telemetry.h"
 #include <atomic>
 #include <chrono>
 #include <iostream>
@@ -29,6 +30,7 @@ int main() {
 #endif
     util::fixWorkingDirectory();
     util::logInfo("Keegan starting up...");
+    util::Telemetry::instance().init("exe");
 
     // Load mood configuration
     bool loaded = false;
@@ -39,6 +41,9 @@ int main() {
     engine.setMoodPack(pack);
     engine.setIntensity(0.75f);
     g_engine = &engine;
+    util::Telemetry::instance().record("engine_start", {
+        {"mood", engine.currentMoodId()}
+    });
 
     // Start Web Server
     uisrv::WebServer server(engine, 3000);
@@ -85,6 +90,9 @@ int main() {
                 std::string moodStr = ui::moodIdToString(mood);
                 g_engine->setMood(moodStr);
                 util::logInfo("Mood changed to: " + moodStr);
+                util::Telemetry::instance().record("mood_change", {
+                    {"mood", moodStr}
+                });
             }
         });
 
@@ -93,6 +101,7 @@ int main() {
                 bool newState = !g_engine->isPlaying();
                 g_engine->setPlaying(newState);
                 util::logInfo(newState ? "Playback resumed" : "Playback paused");
+                util::Telemetry::instance().record(newState ? "playback_start" : "playback_stop");
             }
         });
 
@@ -112,11 +121,20 @@ int main() {
         std::atomic<bool> running{true};
         std::thread tickThread([&]() {
             brain::AppHeuristics heuristics = brain::AppHeuristics::WithDefaults();
+            std::string lastProcess;
             
             while (running.load()) {
                 // Update heuristics with real active window
                 heuristics.update();
                 std::string activeProcess = heuristics.activeProcess();
+                if (activeProcess != lastProcess) {
+                    lastProcess = activeProcess;
+                    if (!activeProcess.empty()) {
+                        util::Telemetry::instance().record("app_focus_change", {
+                            {"process", activeProcess}
+                        });
+                    }
+                }
                 
                 engine.tick(activeProcess, 0.1f);
                 
@@ -160,5 +178,6 @@ int main() {
     device.stop();
     device.shutdown();
     util::logInfo("Keegan shutdown complete.");
+    util::Telemetry::instance().record("engine_shutdown");
     return 0;
 }

@@ -9,6 +9,8 @@ If `KEEGAN_REGISTRY_KEY` is set, all POST endpoints require:
 - `X-Api-Key: <key>` or
 - `Authorization: Bearer <key>`
 
+Telemetry is opt-in. Set `KEEGAN_TELEMETRY=1` on the registry to enable `/api/telemetry` logging.
+
 ## Endpoints
 ### GET /api/stations
 Query params:
@@ -91,6 +93,13 @@ Response:
   "listenerCount": 4,
   "lastSeen": 1738420000000
 }
+```
+
+### POST /api/telemetry
+Accepts telemetry events (JSON) and appends to daily JSONL logs when enabled.
+Response:
+```
+{ "ok": true, "stored": true }
 ```
 
 ### GET /health
