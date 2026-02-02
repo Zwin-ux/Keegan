@@ -2,13 +2,17 @@
 
 ![Keegan glyph](assets/logo.png)
 
-Frequency is the listener-facing name for Keegan — a tray-first local radio engine that weaves moods instead of playlists. It lives in the Windows system tray, runs offline, and drifts through stems, procedural synth, and tiny whispered stories.
+Frequency is the listener-facing name for Keegan - a tray-first local radio engine that weaves moods instead of playlists. It lives in the Windows system tray, runs offline, and drifts through stems, procedural synth, and tiny whispered stories.
 
 Website (local registry UI): http://localhost:8090/  
 Website (production): TBD
 
 ## Visuals
-![Radioverse Console](assets/console_preview.svg)
+![Radioverse Console](assets/console_preview.png)
+
+## What this is / what this isn't
+**This is:** a local-first radio engine + directory where people can host stations and listeners can tune in.  
+**This isn't:** a music streaming service or a social network with feeds.
 
 ## Start here (host a station first)
 This flow gets a live station visible in the directory.
@@ -43,10 +47,15 @@ ai_radio/build/Release/keegan_patched.exe
 - In the web console, open **Ingest Control**.
 - Generate a token and use the RTMP URL in your encoder (see `server/ingest/README.md`).
 
-5) **If the directory doesn’t load:**
+5) **If the directory doesn't load:**
 - Check http://localhost:8090/health returns `{ ok: true, ... }`.
 - Make sure the registry allows your UI origin (`ALLOWED_ORIGINS` in `server/README.md`).
 - The UI shows the exact failure reason next to the REGISTRY label.
+
+## Troubleshooting (quick)
+- **Registry offline:** verify `python registry_server.py` is running and port 8090 is free.
+- **CORS errors:** add your UI origin to `ALLOWED_ORIGINS` in the registry env.
+- **No audio:** confirm the EXE is running and `web/dist` exists.
 
 ## Listen now (no hosting required)
 If you just want to listen:
@@ -59,14 +68,14 @@ Open http://localhost:5173/ and pick a station from the Regional Directory.
 
 ## What it does
 - Tray controls: play/pause, intensity, mood select (Focus Room, Rain Cave, Arcade Night, Sleep Ship).
-- Mood brain: state machine with smooth transitions, personality drift over days, active‑app weighting (IDE biases focus, games bias arcade, media/idle bias sleep/rain).
+- Mood brain: state machine with smooth transitions, personality drift over days, active-app weighting (IDE biases focus, games bias arcade, media/idle bias sleep/rain).
 - Audio engine: miniaudio-based mixer with layer scheduler, gentle crossfades, per-layer filters, ducked TTS/voice bus, and lightweight plate-style reverb.
 - Content: bundled stems plus procedural synth; micro-stories come from a prewritten list for MVP.
 
 ## Host a station (local)
-If you want to broadcast your own “frequency,” the web console handles tokens and URLs for you. See `server/ingest/README.md` for the RTMP wiring.
+If you want to broadcast your own "frequency," the web console handles tokens and URLs for you. See `server/ingest/README.md` for the RTMP wiring.
 
-## Telemetry (opt‑in)
+## Telemetry (opt-in)
 Telemetry is **off by default**.
 - EXE: set `KEEGAN_TELEMETRY=1` to log JSONL to `cache/telemetry.jsonl`.
 - Registry: set `KEEGAN_TELEMETRY=1` to log JSONL to `server/data/telemetry-YYYY-MM-DD.jsonl`.
@@ -77,7 +86,7 @@ python ai_radio/tools/telemetry_summary.py
 ```
 
 ## Open source and modding
-- Keenga is designed as a moddable radio engine. Frequency packs can replace moods, stems, and tuning curves.
+- Keegan is designed as a moddable radio engine. Frequency packs can replace moods, stems, and tuning curves.
 - See `docs/MODDING_GUIDE.md` and `mods/example_neon` for the pack format.
 
 ## Security
@@ -92,7 +101,7 @@ python ai_radio/tools/telemetry_summary.py
 ## Repo map
 - `assets/` - logo and bundled stems/tones (includes Sleep Ship placeholders and synth preset).
 - `config/` - mood pack JSON including Sleep Ship.
-- `src/` - Keenga C++ sources (brain, DSP, state machine).
+- `src/` - Keegan C++ sources (brain, DSP, state machine).
 - `web/` - Radioverse Console UI.
 - `server/` - station registry service + minimal directory UI.
 - `docs/` - specs and platform docs.
@@ -107,7 +116,7 @@ python ai_radio/tools/telemetry_summary.py
 
 ## Design notes (alpha)
 - Aesthetic: Focus amber, Rain blue, Arcade neon magenta, Sleep indigo.
-- Audio feel: smooth equal‑power fades, quiet micro‑stories with ducking, light plate reverb (low‑cut), no clipping (soft limiter).
+- Audio feel: smooth equal-power fades, quiet micro-stories with ducking, light plate reverb (low-cut), no clipping (soft limiter).
 - Mood textures: Focus (ticks/wood/paper), Rain (water/air/stone), Arcade (muted bass + bleeps), Sleep (engine/hiss/creaks).
 
 ## Density curves (per mood)
