@@ -1,1 +1,1 @@
-web: python llm_server.py
+web: python server/registry_server.py
