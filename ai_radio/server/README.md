@@ -12,7 +12,7 @@ Default port: 8090
 
 ## Auth
 Set `KEEGAN_REGISTRY_KEY` to require API keys for POST requests.
-Set `ALLOWED_ORIGINS` (comma-separated) to allow custom web UI origins.
+Set `ALLOWED_ORIGINS` (comma-separated) to allow custom web UI origins. Wildcards like `*.vercel.app` are supported.
 Set `KEEGAN_TELEMETRY=1` to enable `/api/telemetry` logging (writes JSONL to `server/data`).
 
 ## API

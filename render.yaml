@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: keegan-registry
+    env: python
+    rootDir: ai_radio/server
+    buildCommand: pip install -r requirements.txt
+    startCommand: python registry_server.py
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ALLOWED_ORIGINS
+        value: https://YOUR-VERCEL-APP.vercel.app,http://localhost:5173
+      - key: KEEGAN_TELEMETRY
+        value: "1"

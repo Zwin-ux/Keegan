@@ -1048,32 +1048,58 @@ function App() {
   const registryHref = registrySource === 'mixed' ? registryConfig.publicUrl : registryConfig.primaryUrl;
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-[#05070d] text-white">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-40 -right-20 h-[420px] w-[420px] rounded-full bg-sky-500/20 blur-[140px]" />
-        <div className="absolute -bottom-48 left-0 h-[520px] w-[520px] rounded-full bg-amber-400/20 blur-[160px]" />
-        <div className="absolute inset-0 opacity-[0.06] bg-[radial-gradient(circle_at_20%_20%,#ffffff,transparent_40%)]" />
-      </div>
+    <div className="app-shell">
 
       {error && (
-        <div className="absolute top-4 left-1/2 z-30 -translate-x-1/2 rounded-lg border border-red-500/40 bg-red-900/80 px-4 py-2 text-xs text-red-200 backdrop-blur-sm">
+        <div className="absolute left-1/2 top-6 z-30 -translate-x-1/2 rounded-full border border-[rgba(255,107,91,0.6)] bg-[rgba(34,12,12,0.8)] px-5 py-2 text-xs font-mono uppercase tracking-[0.2em] text-ember">
           {error}
         </div>
       )}
 
-      <div className="relative z-10 flex h-full flex-col">
-        <header className="flex flex-wrap items-center justify-between gap-4 px-6 py-6">
+      <div className="app-content flex h-full flex-col">
+        <header className="flex flex-col gap-4 px-6 pt-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="text-xs uppercase tracking-[0.3em] text-white/40">Keegan</div>
-            <h1 className="mt-2 text-3xl font-semibold">Radioverse Console</h1>
+            <div className="kicker">Frequency</div>
+            <h1 className="title mt-2 text-3xl sm:text-4xl">Radioverse Console</h1>
+            <div className="mt-2 text-xs font-mono uppercase tracking-[0.3em] text-muted">
+              Project Keegan
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/50">
-            <span>Registry:</span>
-            <a className="text-white/70 hover:text-white" href={registryHref} target="_blank" rel="noreferrer">{registryLabel}</a>
+          <div className="panel panel-strong flex flex-wrap items-center gap-3 px-4 py-3">
+            <div>
+              <div className="kicker">Registry</div>
+              <a
+                className="text-sm font-mono text-[color:var(--cloud)] transition hover:text-[color:var(--ion)]"
+                href={registryHref}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {registryLabel}
+              </a>
+            </div>
+            <span className={`chip ${registryHealth.status === 'ok' ? 'chip-active' : ''}`}>
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  registryHealth.status === 'ok'
+                    ? 'bg-emerald-400'
+                    : registryHealth.status === 'checking'
+                      ? 'bg-amber-300 animate-pulse'
+                      : 'bg-red-400'
+                }`}
+              />
+              {registryHealth.status === 'ok'
+                ? 'online'
+                : registryHealth.status === 'checking'
+                  ? 'checking'
+                  : registryHealthLabel(registryHealth.failure)}
+            </span>
+            {registryHealth.status === 'ok' && registryHealth.version && (
+              <span className="text-xs font-mono text-muted">v{registryHealth.version}</span>
+            )}
             <select
               value={registrySource}
               onChange={(e) => setRegistrySource(e.target.value as RegistrySource)}
-              className="h-8 rounded-full border border-white/10 bg-white/5 px-3 text-[10px] text-white/70 focus:border-amber-400/60 focus:outline-none"
+              className="field h-9"
             >
               <option value="public">public</option>
               <option value="local">local</option>
@@ -1085,34 +1111,19 @@ function App() {
                 value={customRegistryUrl}
                 onChange={(e) => setCustomRegistryUrl(e.target.value)}
                 placeholder="https://registry.example.com"
-                className="h-8 w-64 rounded-full border border-white/10 bg-white/5 px-3 text-[10px] text-white/70 placeholder:text-white/30 focus:border-sky-400/60 focus:outline-none"
+                className="field h-9 w-64"
               />
-            )}
-            <span className="inline-flex items-center gap-1 text-[10px]">
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  registryHealth.status === 'ok'
-                    ? 'bg-emerald-400'
-                    : registryHealth.status === 'checking'
-                      ? 'bg-amber-300 animate-pulse'
-                      : 'bg-red-400'
-                }`}
-              />
-              {registryHealth.status === 'ok' ? 'online' : registryHealth.status === 'checking' ? 'checking' : registryHealthLabel(registryHealth.failure)}
-            </span>
-            {registryHealth.status === 'ok' && registryHealth.version && (
-              <span className="text-[10px] text-white/40">v{registryHealth.version}</span>
             )}
             {registryHealth.status === 'error' && registryHealth.failure && (
-              <span className="text-[10px] text-red-200">
+              <span className="basis-full text-[11px] font-mono text-ember">
                 {registryErrorMessage(registryHealth.failure)}
               </span>
             )}
           </div>
         </header>
 
-        <main className="grid flex-1 gap-6 px-6 pb-6 lg:grid-cols-[1.15fr_0.85fr]">
-          <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur">
+        <main className="grid flex-1 gap-6 px-6 pb-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <section className="panel panel-strong p-6">
             <StationDirectory
               stations={stations}
               rooms={rooms}
@@ -1132,15 +1143,16 @@ function App() {
           </section>
 
           <section className="flex flex-col gap-6">
-            <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur">
+            <div className="panel p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-xs uppercase tracking-[0.25em] text-white/40">Local Engine</div>
-                  <div className="mt-2 text-xl font-semibold">Keegan Vibe Core</div>
+                  <div className="kicker">Local Engine</div>
+                  <div className="title mt-2 text-xl">Keegan Vibe Core</div>
                 </div>
-                <div className="text-xs uppercase tracking-[0.2em] text-white/50">
-                  WS {wsStatus}
-                </div>
+                <span className={`chip ${wsStatus === 'online' ? 'chip-active' : ''}`}>
+                  <span className={`h-2 w-2 rounded-full ${wsStatus === 'online' ? 'bg-emerald-400' : 'bg-amber-300'}`} />
+                  ws {wsStatus}
+                </span>
               </div>
 
               <div className="mt-6 flex flex-col items-center gap-4">
@@ -1168,99 +1180,101 @@ function App() {
                     onClick={() => handleMoodChange(m)}
                     aria-label={`Switch to ${m} mood`}
                     aria-pressed={mood === m}
-                    className={`text-[10px] uppercase font-mono px-3 py-2 border rounded transition-all
-                      ${mood === m ? 'bg-white text-black border-white' : 'text-zinc-500 border-zinc-800 hover:border-zinc-600'}
-                    `}
+                    className={`mood-button ${mood === m ? 'active' : ''}`}
                   >
-                    <span className="text-zinc-700 mr-1">{i + 1}</span>{m}
+                    <span className="mr-1 text-[color:var(--slate)]">{i + 1}</span>
+                    {m}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur">
+            <div className="panel p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-xs uppercase tracking-[0.25em] text-white/40">Broadcast</div>
-                  <div className="mt-2 text-xl font-semibold">Ingest Control</div>
+                  <div className="kicker">Broadcast</div>
+                  <div className="title mt-2 text-xl">Ingest Control</div>
                 </div>
-                <div className={`text-xs uppercase tracking-[0.2em] ${broadcastStatus?.broadcasting ? 'text-emerald-300' : 'text-white/40'}`}>
+                <span className={`chip ${broadcastStatus?.broadcasting ? 'chip-active' : ''}`}>
+                  <span className={`h-2 w-2 rounded-full ${broadcastStatus?.broadcasting ? 'bg-emerald-400' : 'bg-white/40'}`} />
                   {broadcastStatus?.broadcasting ? 'live' : 'idle'}
-                </div>
+                </span>
               </div>
 
               <div className="mt-4 grid gap-4">
-                <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-white/40">Session</div>
-                  <div className="mt-2 text-sm text-white/70">
+                <div className="panel-inset p-4">
+                  <div className="kicker">Session</div>
+                  <div className="mt-2 text-sm text-[color:var(--cloud)]">
                     {broadcastStatus?.broadcasting ? 'Broadcasting' : 'Not broadcasting'}
                   </div>
-                  <div className="mt-2 text-xs text-white/50">
-                    Session ID: <span className="font-mono text-white/80">{broadcastStatus?.sessionId || '--'}</span>
+                  <div className="mt-2 text-xs text-muted">
+                    Session ID: <span className="font-mono text-[color:var(--cloud)]">{broadcastStatus?.sessionId || '--'}</span>
                   </div>
-                  <div className="text-xs text-white/50">Uptime: <span className="text-white/80">{broadcastUptime}</span></div>
+                  <div className="text-xs text-muted">
+                    Uptime: <span className="text-[color:var(--cloud)]">{broadcastUptime}</span>
+                  </div>
                   {broadcastStatus?.streamUrl && (
-                    <div className="mt-2 text-xs text-white/50">
-                      Stream URL: <span className="font-mono text-white/80 break-all">{broadcastStatus.streamUrl}</span>
+                    <div className="mt-2 text-xs text-muted">
+                      Stream URL: <span className="font-mono text-[color:var(--cloud)] break-all">{broadcastStatus.streamUrl}</span>
                     </div>
                   )}
                 </div>
 
-                <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-white/40">Token</div>
-                  <div className="mt-2 text-xs font-mono break-all text-white/80">
+                <div className="panel-inset p-4">
+                  <div className="kicker">Token</div>
+                  <div className="mt-2 text-xs font-mono break-all text-[color:var(--cloud)]">
                     {broadcastToken || 'Generate a token to unlock ingest.'}
                   </div>
-                  <div className="mt-2 text-xs text-white/50">
+                  <div className="mt-2 text-xs text-muted">
                     {broadcastTokenExpiry ? `Expires in ${tokenRemaining}` : 'No token issued yet.'}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       onClick={requestBroadcastToken}
                       disabled={ingestBusy}
-                      className="rounded-full border border-white/20 px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-white/70 transition hover:border-white/60 disabled:opacity-40"
+                      className="glass-button rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[color:var(--cloud)] disabled:opacity-40"
                     >
-                      Generate Token
+                      Generate
                     </button>
                     <button
                       onClick={startBroadcast}
                       disabled={ingestBusy || !broadcastToken}
-                      className="rounded-full border border-emerald-300/40 px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-emerald-200 transition hover:border-emerald-300 disabled:opacity-40"
+                      className="glass-button rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[color:var(--ion)] disabled:opacity-40"
                     >
                       Start
                     </button>
                     <button
                       onClick={stopBroadcast}
                       disabled={ingestBusy || !broadcastStatus?.broadcasting}
-                      className="rounded-full border border-red-300/40 px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-red-200 transition hover:border-red-300 disabled:opacity-40"
+                      className="glass-button rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-ember disabled:opacity-40"
                     >
                       Stop
                     </button>
                     <button
                       onClick={() => copyText(broadcastToken)}
                       disabled={!broadcastToken}
-                      className="rounded-full border border-white/10 px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-white/50 transition hover:border-white/40 disabled:opacity-40"
+                      className="glass-button rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-muted disabled:opacity-40"
                     >
                       Copy
                     </button>
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-white/40">Ingest URLs</div>
+                <div className="panel-inset p-4">
+                  <div className="kicker">Ingest URLs</div>
                   {(['rtmpUrl', 'hlsUrl', 'webrtcUrl'] as const).map((key) => (
                     <div key={key} className="mt-3">
-                      <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-white/40">
+                      <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.2em] text-muted">
                         <span>{key.replace('Url', '').toUpperCase()}</span>
                         <button
                           onClick={() => copyText(ingestInfo?.[key])}
                           disabled={!ingestInfo?.[key]}
-                          className="rounded-full border border-white/10 px-2 py-1 text-[9px] text-white/60 transition hover:border-white/40 disabled:opacity-40"
+                          className="glass-button rounded-full px-2 py-1 text-[9px] text-muted disabled:opacity-40"
                         >
                           Copy
                         </button>
                       </div>
-                      <div className="mt-1 text-xs font-mono break-all text-white/80">
+                      <div className="mt-1 text-xs font-mono break-all text-[color:var(--cloud)]">
                         {ingestInfo?.[key] || '--'}
                       </div>
                     </div>
@@ -1268,41 +1282,42 @@ function App() {
                 </div>
 
                 {ingestError && (
-                  <div className="text-xs uppercase tracking-[0.2em] text-red-300">
+                  <div className="text-xs font-mono uppercase tracking-[0.2em] text-ember">
                     {ingestError}
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur">
+            <div className="panel p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-xs uppercase tracking-[0.25em] text-white/40">Station Output</div>
-                  <div className="mt-2 text-xl font-semibold">Live Stream Monitor</div>
+                  <div className="kicker">Station Output</div>
+                  <div className="title mt-2 text-xl">Live Stream Monitor</div>
                 </div>
-                <div className={`text-xs uppercase tracking-[0.2em] ${playingStation ? 'text-emerald-300' : 'text-white/40'}`}>
+                <span className={`chip ${playingStation ? 'chip-active' : ''}`}>
+                  <span className={`h-2 w-2 rounded-full ${playingStation ? 'bg-emerald-400' : 'bg-white/40'}`} />
                   {playingStation ? 'playing' : 'idle'}
-                </div>
+                </span>
               </div>
 
-              <div className="mt-4 rounded-2xl border border-white/10 bg-black/40 p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-white/40">Selected Station</div>
-                <div className="mt-2 text-lg font-semibold">
+              <div className="mt-4 panel-inset p-4">
+                <div className="kicker">Selected Station</div>
+                <div className="title mt-2 text-lg">
                   {selectedStation?.name ?? 'No station selected'}
                 </div>
-                <div className="text-sm text-white/50">
+                <div className="text-sm text-muted">
                   {selectedStation?.frequency ? `${selectedStation.frequency.toFixed(1)} MHz` : '--'}
                   {selectedStation?.region ? ` · ${selectedStation.region}` : ''}
                   {typeof selectedStation?.listenerCount === 'number' ? ` · ${selectedStation.listenerCount} listeners` : ''}
                 </div>
-                <div className="mt-3 text-sm text-white/60">
+                <div className="mt-3 text-sm text-[color:var(--cloud)]">
                   {selectedStation?.description ?? 'Choose a station to listen.'}
                 </div>
                 {selectedRoom && (
-                  <div className="mt-3 rounded-xl border border-sky-300/20 bg-sky-500/5 px-3 py-2 text-xs text-sky-100">
-                    Room: {selectedRoom.toneId ?? 'room'} {selectedRoom.appKey ? `· ${selectedRoom.appKey}` : ''}{' '}
-                    {selectedRoom.frequency ? `· ${selectedRoom.frequency.toFixed(1)} MHz` : ''}
+                  <div className="mt-3 rounded-xl border border-[rgba(106,217,255,0.2)] bg-[rgba(106,217,255,0.08)] px-3 py-2 text-xs text-[color:var(--ion)]">
+                    Room: {selectedRoom.toneId ?? 'room'} {selectedRoom.appKey ? `- ${selectedRoom.appKey}` : ''}{' '}
+                    {selectedRoom.frequency ? `- ${selectedRoom.frequency.toFixed(1)} MHz` : ''}
                   </div>
                 )}
               </div>
@@ -1328,48 +1343,48 @@ function App() {
                   onError={() => setStreamStatus('error')}
                 />
                 {selectedStation && !selectedStation.streamUrl && (
-                  <div className="mt-2 text-xs uppercase tracking-[0.2em] text-white/40">
+                  <div className="mt-2 text-xs font-mono uppercase tracking-[0.2em] text-muted">
                     Stream URL not set.
                   </div>
                 )}
                 {streamStatus === 'error' && (
-                  <div className="mt-2 text-xs uppercase tracking-[0.2em] text-red-300">
+                  <div className="mt-2 text-xs font-mono uppercase tracking-[0.2em] text-ember">
                     Stream playback failed.
                   </div>
                 )}
               </div>
 
-              <div className="mt-4 rounded-2xl border border-white/10 bg-black/40 p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-white/40">Stream Health</div>
-                <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-white/60">
+              <div className="mt-4 panel-inset p-4">
+                <div className="kicker">Stream Health</div>
+                <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-muted">
                   <div>
-                    <div className="uppercase tracking-[0.2em] text-white/40">Status</div>
-                    <div className="mt-1 text-white/80">{hlsHealth.status}</div>
+                    <div className="uppercase tracking-[0.2em] text-muted">Status</div>
+                    <div className="mt-1 text-[color:var(--cloud)]">{hlsHealth.status}</div>
                   </div>
                   <div>
-                    <div className="uppercase tracking-[0.2em] text-white/40">Bitrate</div>
-                    <div className="mt-1 text-white/80">
-                      {hlsHealth.bitrateKbps ? `${hlsHealth.bitrateKbps} kbps` : '—'}
+                    <div className="uppercase tracking-[0.2em] text-muted">Bitrate</div>
+                    <div className="mt-1 text-[color:var(--cloud)]">
+                      {hlsHealth.bitrateKbps ? `${hlsHealth.bitrateKbps} kbps` : '--'}
                     </div>
                   </div>
                   <div>
-                    <div className="uppercase tracking-[0.2em] text-white/40">Uptime</div>
-                    <div className="mt-1 text-white/80">{hlsWindow || '—'}</div>
+                    <div className="uppercase tracking-[0.2em] text-muted">Uptime</div>
+                    <div className="mt-1 text-[color:var(--cloud)]">{hlsWindow || '--'}</div>
                   </div>
                   <div>
-                    <div className="uppercase tracking-[0.2em] text-white/40">Updated</div>
-                    <div className="mt-1 text-white/80">
-                      {hlsHealth.lastUpdatedMs ? formatDurationMs(Date.now() - hlsHealth.lastUpdatedMs) : '—'}
+                    <div className="uppercase tracking-[0.2em] text-muted">Updated</div>
+                    <div className="mt-1 text-[color:var(--cloud)]">
+                      {hlsHealth.lastUpdatedMs ? formatDurationMs(Date.now() - hlsHealth.lastUpdatedMs) : '--'}
                     </div>
                   </div>
                 </div>
                 {isHlsUrl(selectedStation?.streamUrl) && (
-                  <div className="mt-3 text-[11px] uppercase tracking-[0.2em] text-white/40">
+                  <div className="mt-3 text-[10px] font-mono uppercase tracking-[0.2em] text-muted">
                     Uptime reflects the current HLS window.
                   </div>
                 )}
                 {!isHlsUrl(selectedStation?.streamUrl) && (
-                  <div className="mt-3 text-[11px] uppercase tracking-[0.2em] text-white/40">
+                  <div className="mt-3 text-[10px] font-mono uppercase tracking-[0.2em] text-muted">
                     HLS health available for .m3u8 streams only.
                   </div>
                 )}

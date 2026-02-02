@@ -307,7 +307,28 @@ class RegistryHandler(BaseHTTPRequestHandler):
     def _origin_allowed(self, origin):
         if '*' in ALLOWED_ORIGINS:
             return True
-        return origin in ALLOWED_ORIGINS
+        if origin in ALLOWED_ORIGINS:
+            return True
+        if not origin:
+            return False
+        try:
+            parsed = urlparse(origin)
+            host = parsed.hostname or ''
+        except Exception:
+            host = ''
+        for pattern in ALLOWED_ORIGINS:
+            if '*.' not in pattern:
+                continue
+            if '://' in pattern:
+                try:
+                    pattern_host = urlparse(pattern).hostname or ''
+                except Exception:
+                    pattern_host = ''
+            else:
+                pattern_host = pattern
+            if pattern_host.startswith('*.') and host.endswith(pattern_host[1:]):
+                return True
+        return False
 
     def _cors_origin(self):
         origin = self.headers.get('Origin')

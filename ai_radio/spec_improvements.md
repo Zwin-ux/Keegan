@@ -373,3 +373,62 @@ Why: A public website cannot talk to a user's localhost. The local bridge stays 
 - [ ] Registry room frequency assignment
 - [ ] LAN QR in console
 - [ ] One-command dev start
+
+---
+
+# Frequency Console UI Overhaul (Spec v2)
+
+Goal: make the web console feel like a real radio control desk, not a generic dashboard. The UI should feel tactile, dense, and intentional. It should look hand-designed with a distinct palette, strong typography, and analog-inspired details.
+
+## Design intent
+- "Studio + signal lab": a dark control room with warm copper accents and cool ion-blue highlights.
+- Prioritize readability for long sessions (low glare, soft gradients, clear labels).
+- Signal energy should feel alive (subtle motion, animated status lights).
+
+## Visual system
+### Palette (hex)
+- Ink: #0b0e13 (primary background)
+- Charcoal: #121822 (panel background)
+- Copper: #f2a44b (primary accent)
+- Ion: #6ad9ff (secondary accent)
+- Ember: #ff6b5b (error/alert)
+- Cloud: #e8eef7 (primary text)
+- Slate: #97a3b6 (muted text)
+
+### Typography
+- Display: "Unbounded" (headings, console title)
+- Body: "Sora" (paragraphs, card content)
+- Mono: "JetBrains Mono" (labels, codes, URLs)
+
+### Texture + background
+- Base gradient: vertical ink -> charcoal.
+- Soft radial glows near corners (copper + ion).
+- Thin grid overlay (very low opacity) to echo a control panel.
+
+## Layout (desktop)
+- Header: brand left, registry status and source selector right.
+- Main: 2-column layout.
+  - Left (wide): Regional Directory (stations + rooms tabs).
+  - Right (stacked): Engine Core, Broadcast Desk, Stream Monitor.
+- Panels: thicker borders, more contrast, and inner shadows to feel like hardware modules.
+
+## Component treatments
+- Station cards: frequency badge, status chip, listener count, and one-line description.
+- Room cards: frequency badge + room tag, "Tune" action, listener pulse.
+- Status chips: circle LED + label (online / offline / CORS / timeout).
+- Input fields: dark inset, sharp focus ring in copper/ion.
+
+## Motion
+- Page load: slight upward fade (200-300ms).
+- Registry status LED: slow pulse when checking.
+- Background glow drift: 12-18s loop.
+
+## Accessibility
+- Minimum contrast ratio 4.5:1 for text and labels.
+- Clear focus ring on all interactive elements.
+- Avoid color-only status; always pair with label.
+
+## Implementation notes
+- Update `web/src/index.css` with new CSS variables + font imports.
+- Refactor `web/src/App.tsx` layout and panels to match the new structure.
+- Refine `web/src/components/StationDirectory.tsx` cards with the new visual system.

@@ -5,7 +5,8 @@
 Frequency is the listener-facing name for Keegan - a tray-first local radio engine that weaves moods instead of playlists. It lives in the Windows system tray, runs offline, and drifts through stems, procedural synth, and tiny whispered stories.
 
 Website (local registry UI): http://localhost:8090/  
-Website (production): TBD
+Website (production): https://YOUR-VERCEL-APP.vercel.app  
+Registry (production): https://YOUR-RENDER-APP.onrender.com
 
 ## Visuals
 ![Radioverse Console](assets/console_preview.png)
@@ -58,6 +59,25 @@ ai_radio/build/Release/keegan_patched.exe
 - The UI shows the exact failure reason next to the REGISTRY label.
 
 Tip: Use the **Registry** selector in the header to switch between Public, Local, Mixed, or Custom registries.
+
+## Deploy (public website + registry)
+This repo includes deploy configs for a hosted demo using Vercel (web UI) and Render (registry).
+
+1) **Registry on Render**
+   - Uses `render.yaml` (root).
+   - Env:
+     - `ALLOWED_ORIGINS=https://YOUR-VERCEL-APP.vercel.app,http://localhost:5173`
+     - `KEEGAN_REGISTRY_KEY` (optional, protects POST)
+     - `KEEGAN_TELEMETRY=1` (optional)
+
+2) **Web UI on Vercel**
+   - Set root directory to `ai_radio/web`.
+   - Env:
+     - `VITE_REGISTRY_URL=https://YOUR-RENDER-APP.onrender.com`
+     - `VITE_REGISTRY_KEY` (optional)
+     - `VITE_BRIDGE_URL` / `VITE_BRIDGE_KEY` if you are wiring a local EXE bridge
+
+Tip: `ALLOWED_ORIGINS` supports wildcard subdomains like `*.vercel.app` if you want to keep preview URLs open.
 
 ## Troubleshooting (quick)
 - **Registry offline:** verify `python registry_server.py` is running and port 8090 is free.

@@ -1,53 +1,262 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Sora:wght@400;500;600&family=Unbounded:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg-dark: #05070d;
-  --glass-panel: rgba(20, 25, 35, 0.7);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --font-body: "Space Grotesk", sans-serif;
-  --font-mono: "IBM Plex Mono", monospace;
+  --ink: #0b0e13;
+  --charcoal: #121822;
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --panel-border-strong: rgba(255, 255, 255, 0.14);
+  --copper: #f2a44b;
+  --ion: #6ad9ff;
+  --ember: #ff6b5b;
+  --cloud: #e8eef7;
+  --slate: #97a3b6;
+  --font-display: "Unbounded", sans-serif;
+  --font-body: "Sora", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
-  background-color: var(--bg-dark);
-  color: #e0e6ed;
+  background-color: var(--ink);
+  color: var(--cloud);
   font-family: var(--font-body);
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
 }
 
+.font-display {
+  font-family: var(--font-display);
+}
+
 .font-mono {
   font-family: var(--font-mono);
 }
 
+.app-shell {
+  position: relative;
+  min-height: 100vh;
+  background:
+    radial-gradient(900px 700px at 10% 10%, rgba(242, 164, 75, 0.16), transparent 55%),
+    radial-gradient(800px 600px at 92% 20%, rgba(106, 217, 255, 0.16), transparent 55%),
+    linear-gradient(180deg, #0b0e13 0%, #0c1118 50%, #0b0e13 100%);
+  overflow: hidden;
+}
+
+.app-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 48px 48px, 48px 48px;
+  opacity: 0.22;
+  pointer-events: none;
+}
+
+.app-shell::after {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  background: radial-gradient(600px 420px at 20% 80%, rgba(242, 164, 75, 0.12), transparent 60%);
+  opacity: 0.6;
+  animation: glow-drift 16s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.app-content {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+}
+
+.panel,
 .glass-panel {
-  background: var(--glass-panel);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  border-radius: 12px;
+  background: rgba(18, 24, 34, 0.76);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.45);
+  border-radius: 24px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.panel-strong {
+  border-color: var(--panel-border-strong);
+  box-shadow: 0 22px 40px rgba(0, 0, 0, 0.5);
+}
+
+.panel-inset {
+  background: rgba(7, 10, 15, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 18px;
+}
+
+.kicker {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.32em;
+  font-size: 10px;
+  color: var(--slate);
+}
+
+.title {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+.field {
+  height: 40px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(7, 10, 15, 0.55);
+  color: var(--cloud);
+  padding: 0 14px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  outline: none;
+}
+
+.field::placeholder {
+  color: rgba(151, 163, 182, 0.6);
+}
+
+.field:focus {
+  border-color: rgba(106, 217, 255, 0.6);
+  box-shadow: 0 0 0 2px rgba(106, 217, 255, 0.12);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--slate);
+}
+
+.chip-active {
+  border-color: rgba(242, 164, 75, 0.5);
+  color: var(--cloud);
+}
+
+.tab-group {
+  display: inline-flex;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(7, 10, 15, 0.6);
+  padding: 4px;
+  gap: 4px;
+}
+
+.tab-button {
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--slate);
+  transition: all 0.2s ease;
+}
+
+.tab-button.active {
+  color: var(--cloud);
+  background: rgba(242, 164, 75, 0.16);
+  border: 1px solid rgba(242, 164, 75, 0.4);
+}
+
+.card {
+  background: rgba(7, 10, 15, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  transition: all 0.2s ease;
+}
+
+.card:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.card-active {
+  border-color: rgba(242, 164, 75, 0.6);
+  box-shadow: 0 0 0 1px rgba(242, 164, 75, 0.25);
+}
+
+.text-muted {
+  color: var(--slate);
+}
+
+.text-accent {
+  color: var(--copper);
+}
+
+.text-ion {
+  color: var(--ion);
+}
+
+.text-ember {
+  color: var(--ember);
+}
+
+.mood-button {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 8px 14px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--slate);
+  transition: all 0.2s ease;
+  background: rgba(7, 10, 15, 0.5);
+}
+
+.mood-button.active {
+  border-color: rgba(242, 164, 75, 0.6);
+  color: var(--cloud);
+  background: rgba(242, 164, 75, 0.12);
 }
 
 .glass-button {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(7, 10, 15, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   transition: all 0.2s ease;
   cursor: pointer;
 }
 
 .glass-button:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(14, 19, 27, 0.7);
 }
 
 .glass-button:active {
-  transform: scale(0.98);
+  transform: translateY(1px);
 }
 
 .glass-button:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.3);
+  outline: 2px solid rgba(106, 217, 255, 0.4);
   outline-offset: 2px;
+}
+
+@keyframes glow-drift {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(40px, -20px, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
 }

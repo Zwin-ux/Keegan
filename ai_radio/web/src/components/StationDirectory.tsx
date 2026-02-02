@@ -75,23 +75,19 @@ export const StationDirectory: React.FC<StationDirectoryProps> = ({
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4">
         <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-white/50">Stations</div>
-          <h2 className="mt-2 text-2xl font-semibold text-white">Regional Directory</h2>
+          <div className="kicker">Stations</div>
+          <h2 className="title mt-2 text-2xl">Regional Directory</h2>
         </div>
-        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-white/60">
+        <div className="tab-group">
           <button
             onClick={() => setTab('stations')}
-            className={`rounded-full border px-3 py-2 transition ${
-              tab === 'stations' ? 'border-amber-300/70 text-amber-200' : 'border-white/10 text-white/50'
-            }`}
+            className={`tab-button ${tab === 'stations' ? 'active' : ''}`}
           >
             Stations
           </button>
           <button
             onClick={() => setTab('rooms')}
-            className={`rounded-full border px-3 py-2 transition ${
-              tab === 'rooms' ? 'border-sky-300/70 text-sky-200' : 'border-white/10 text-white/50'
-            }`}
+            className={`tab-button ${tab === 'rooms' ? 'active' : ''}`}
           >
             Rooms
           </button>
@@ -101,30 +97,30 @@ export const StationDirectory: React.FC<StationDirectoryProps> = ({
             value={region}
             onChange={(e) => onRegionChange(e.target.value)}
             placeholder="region (ex: us-midwest)"
-            className="h-10 w-48 rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white/80 placeholder:text-white/30 focus:border-amber-400/60 focus:outline-none"
+            className="field w-48"
           />
           <input
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
             placeholder={tab === 'rooms' ? 'search room' : 'search station'}
-            className="h-10 w-48 rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white/80 placeholder:text-white/30 focus:border-sky-400/60 focus:outline-none"
+            className="field w-48"
           />
         </div>
       </div>
 
       <div className="flex-1 overflow-auto pr-2">
         {tab === 'stations' && loading && (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-6 text-sm text-white/60">
+          <div className="panel-inset p-6 text-sm text-muted">
             Scanning frequencies...
           </div>
         )}
         {tab === 'stations' && error && (
-          <div className="rounded-xl border border-red-400/30 bg-red-500/10 p-6 text-sm text-red-100">
+          <div className="panel-inset p-6 text-sm text-ember">
             {error}
           </div>
         )}
         {tab === 'stations' && !loading && !error && filtered.length === 0 && (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-6 text-sm text-white/60">
+          <div className="panel-inset p-6 text-sm text-muted">
             No stations found.
           </div>
         )}
@@ -139,20 +135,16 @@ export const StationDirectory: React.FC<StationDirectoryProps> = ({
                 <button
                   key={station.id}
                   onClick={() => onSelect(station)}
-                  className={`group w-full rounded-2xl border px-5 py-4 text-left transition ${
-                    active
-                      ? 'border-amber-400/60 bg-gradient-to-br from-amber-400/10 via-white/5 to-transparent'
-                      : 'border-white/10 bg-white/5 hover:border-white/20'
-                  }`}
+                  className={`card w-full px-5 py-4 text-left ${active ? 'card-active' : ''}`}
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-xs uppercase tracking-[0.2em] text-white/40">
+                      <div className="kicker">
                         {station.frequency ? `${station.frequency.toFixed(1)} MHz` : 'Unlisted'}
                       </div>
-                      <div className="mt-1 text-lg font-semibold text-white">{station.name ?? station.id}</div>
+                      <div className="title mt-1 text-lg">{station.name ?? station.id}</div>
                     </div>
-                    <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/60">
+                    <div className="flex items-center gap-3 text-[10px] font-mono uppercase tracking-[0.2em] text-muted">
                       <span className={`h-2 w-2 rounded-full ${statusColor}`} />
                       {status}
                       {typeof station.listenerCount === 'number' && (
@@ -160,33 +152,33 @@ export const StationDirectory: React.FC<StationDirectoryProps> = ({
                       )}
                     </div>
                   </div>
-                  <div className="mt-2 text-sm text-white/60">
+                  <div className="mt-2 text-sm text-muted">
                     {station.description ?? 'Signal locked. Atmosphere undefined.'}
                   </div>
-                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.18em] text-white/40">
-                  <span>{station.region ?? 'unknown region'}</span>
-                  {station.source && <span>{station.source}</span>}
-                  {station.mood && <span>{station.mood.replace('_', ' ')}</span>}
-                  {typeof station.energy === 'number' && (
-                    <span>{Math.round(station.energy * 100)}% energy</span>
-                  )}
-                </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-3 text-[10px] font-mono uppercase tracking-[0.2em] text-muted">
+                    <span>{station.region ?? 'unknown region'}</span>
+                    {station.source && <span>{station.source}</span>}
+                    {station.mood && <span>{station.mood.replace('_', ' ')}</span>}
+                    {typeof station.energy === 'number' && (
+                      <span>{Math.round(station.energy * 100)}% energy</span>
+                    )}
+                  </div>
                   <div className="mt-4">
                     {station.streamUrl ? (
-                      <div className="flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
+                      <div className="flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--copper)]">
                         <span>Listen now</span>
                         <a
                           href={station.streamUrl}
                           target="_blank"
                           rel="noreferrer"
                           onClick={(event) => event.stopPropagation()}
-                          className="text-white/60 underline-offset-4 hover:text-white hover:underline"
+                          className="text-muted underline-offset-4 hover:text-[color:var(--cloud)] hover:underline"
                         >
                           Open stream
                         </a>
                       </div>
                     ) : (
-                      <span className="text-xs uppercase tracking-[0.2em] text-white/30">No stream</span>
+                      <span className="text-xs uppercase tracking-[0.2em] text-muted">No stream</span>
                     )}
                   </div>
                 </button>
@@ -196,17 +188,17 @@ export const StationDirectory: React.FC<StationDirectoryProps> = ({
         )}
 
         {tab === 'rooms' && roomsLoading && (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-6 text-sm text-white/60">
+          <div className="panel-inset p-6 text-sm text-muted">
             Scanning rooms...
           </div>
         )}
         {tab === 'rooms' && roomsError && (
-          <div className="rounded-xl border border-red-400/30 bg-red-500/10 p-6 text-sm text-red-100">
+          <div className="panel-inset p-6 text-sm text-ember">
             {roomsError}
           </div>
         )}
         {tab === 'rooms' && !roomsLoading && !roomsError && filteredRooms.length === 0 && (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-6 text-sm text-white/60">
+          <div className="panel-inset p-6 text-sm text-muted">
             No rooms found.
           </div>
         )}
@@ -219,37 +211,33 @@ export const StationDirectory: React.FC<StationDirectoryProps> = ({
                 <button
                   key={room.roomId}
                   onClick={() => onSelectRoom(room)}
-                  className={`group w-full rounded-2xl border px-5 py-4 text-left transition ${
-                    active
-                      ? 'border-sky-400/60 bg-gradient-to-br from-sky-400/10 via-white/5 to-transparent'
-                      : 'border-white/10 bg-white/5 hover:border-white/20'
-                  }`}
+                  className={`card w-full px-5 py-4 text-left ${active ? 'card-active' : ''}`}
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-xs uppercase tracking-[0.2em] text-white/40">
+                      <div className="kicker">
                         {room.frequency ? `${room.frequency.toFixed(1)} MHz` : 'Unlisted'}
                       </div>
-                      <div className="mt-1 text-lg font-semibold text-white">
-                        {room.toneId ?? 'Room'} {room.appKey ? `· ${room.appKey}` : ''}
+                      <div className="title mt-1 text-lg">
+                        {room.toneId ?? 'Room'} {room.appKey ? `- ${room.appKey}` : ''}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/60">
+                    <div className="flex items-center gap-3 text-[10px] font-mono uppercase tracking-[0.2em] text-muted">
                       {typeof room.listenerCount === 'number' && (
                         <span>{room.listenerCount} listeners</span>
                       )}
                     </div>
                   </div>
-                  <div className="mt-2 text-sm text-white/60">
+                  <div className="mt-2 text-sm text-muted">
                     Room ID: {room.roomId}
                   </div>
-                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.18em] text-white/40">
-                  <span>{room.region ?? 'unknown region'}</span>
-                  {room.source && <span>{room.source}</span>}
-                  {room.toneId && <span>{room.toneId.replace('_', ' ')}</span>}
-                </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-3 text-[10px] font-mono uppercase tracking-[0.2em] text-muted">
+                    <span>{room.region ?? 'unknown region'}</span>
+                    {room.source && <span>{room.source}</span>}
+                    {room.toneId && <span>{room.toneId.replace('_', ' ')}</span>}
+                  </div>
                   {active && room.frequency && (
-                    <div className="mt-3 text-xs uppercase tracking-[0.2em] text-sky-200">
+                    <div className="mt-3 text-xs font-mono uppercase tracking-[0.2em] text-[color:var(--ion)]">
                       Tune to {room.frequency.toFixed(1)} MHz
                     </div>
                   )}
@@ -262,3 +250,4 @@ export const StationDirectory: React.FC<StationDirectoryProps> = ({
     </div>
   );
 };
+
