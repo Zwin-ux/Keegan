@@ -61,7 +61,7 @@ ai_radio/build/Release/keegan_patched.exe
 Tip: Use the **Registry** selector in the header to switch between Public, Local, Mixed, or Custom registries.
 
 ## Deploy (public website + registry)
-This repo includes deploy configs for a hosted demo using Vercel (web UI) and Render (registry).
+This repo includes deploy configs for a hosted demo using Vercel (web UI), Render (registry), and Fly (MediaMTX ingest).
 
 See [DEPLOY.md](DEPLOY.md) for full setup instructions.
 
@@ -73,8 +73,12 @@ Current Endpoints:
    - Uses `render.yaml` (root).
    - Env:
     - `ALLOWED_ORIGINS=https://keegan-khaki.vercel.app,http://localhost:5173`
-     - `KEEGAN_REGISTRY_KEY` (optional, protects POST)
-     - `KEEGAN_TELEMETRY=1` (optional)
+    - `KEEGAN_REGISTRY_KEY` (optional, protects POST)
+    - `KEEGAN_INGEST_SECRET` (required for web-host tokens)
+    - `KEEGAN_INGEST_RTMP_BASE` (Fly RTMP)
+    - `KEEGAN_INGEST_HLS_BASE` (Fly HLS)
+    - `KEEGAN_INGEST_WEBRTC_BASE` (Fly WebRTC)
+    - `KEEGAN_TELEMETRY=1` (optional)
 
 2) **Web UI on Vercel**
    - Set root directory to `ai_radio/web`.
@@ -84,6 +88,10 @@ Current Endpoints:
      - `VITE_BRIDGE_URL` / `VITE_BRIDGE_KEY` if you are wiring a local EXE bridge
 
 Tip: `ALLOWED_ORIGINS` supports wildcard subdomains like `*.vercel.app` if you want to keep preview URLs open.
+
+3) **Ingest on Fly**
+   - Use `ai_radio/ingest` as the Fly working directory.
+   - Deploy MediaMTX and point your registry env vars to the Fly hostname.
 
 ## Troubleshooting (quick)
 - **Registry offline:** verify `python registry_server.py` is running and port 8090 is free.

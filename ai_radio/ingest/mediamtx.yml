@@ -1,0 +1,15 @@
+#############################################
+# MediaMTX config for hosted ingest (Fly)
+#############################################
+
+paths:
+  all:
+    source: publisher
+
+rtmp: yes
+hls: yes
+webrtc: yes
+
+rtmpAddress: :1935
+hlsAddress: :8888
+webrtcAddress: :8889

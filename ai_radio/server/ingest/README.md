@@ -1,7 +1,7 @@
 ﻿# Ingest Wiring (MediaMTX)
 
 This project expects an external media server to handle RTMP/WebRTC/HLS.
-We recommend MediaMTX for local development.
+We recommend MediaMTX for local development and Fly.io for hosted ingest.
 
 ## Quick start
 1) Download MediaMTX from: https://github.com/bluenviron/mediamtx/releases
@@ -10,6 +10,9 @@ We recommend MediaMTX for local development.
 ```
 mediamtx.exe mediamtx.yml
 ```
+
+## Hosted ingest (Fly)
+Use the deployable config in `ai_radio/ingest` and follow `ai_radio/ingest/README.md`.
 
 ## Expected URLs
 - RTMP: rtmp://localhost/live/<token>

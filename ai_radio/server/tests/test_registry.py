@@ -117,6 +117,12 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(payload.get('stationId'), 'anon')
         token = payload.get('token')
         self.assertTrue(token)
+        session_id = payload.get('sessionId')
+
+        status, payload = self.request_json('/api/stations/anon/status')
+        self.assertEqual(status, 200)
+        self.assertTrue(payload.get('broadcasting'))
+        self.assertEqual(payload.get('sessionId'), session_id)
 
         status, payload = self.request_json(
             '/api/stations/web/begin',

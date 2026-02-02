@@ -5,6 +5,7 @@ This guide covers deploying the **Registry Server** (Backend) and the **Web Cons
 ## Current Deployments (active)
 - Backend: https://keegan-qkgq.onrender.com
 - Frontend: https://keegan-khaki.vercel.app
+- Ingest (Fly): not deployed yet
 
 ## Prerequisites
 - [GitHub Account](https://github.com) (Repo pushed to GitHub)
@@ -30,6 +31,9 @@ This guide covers deploying the **Registry Server** (Backend) and the **Web Cons
     - `ALLOWED_ORIGINS`: `https://keegan-khaki.vercel.app` (or your Vercel URL)
     - `KEEGAN_REGISTRY_KEY`: `secret_admin_key_123` (Set your own secret for admin actions).
     - `KEEGAN_INGEST_SECRET`: `secret_ingest_key_123` (Signs web-host tokens).
+    - `KEEGAN_INGEST_RTMP_BASE`: `rtmp://YOUR-FLY-APP.fly.dev/live`
+    - `KEEGAN_INGEST_HLS_BASE`: `https://YOUR-FLY-APP.fly.dev/live`
+    - `KEEGAN_INGEST_WEBRTC_BASE`: `https://YOUR-FLY-APP.fly.dev/live`
     - `PYTHONUNBUFFERED`: `true` (Ensures logs show up immediately).
     - `PORT`: `10000` (Render's default port).
 5.  **Deploy**: Click **Create Web Service**.
@@ -47,11 +51,26 @@ This guide covers deploying the **Registry Server** (Backend) and the **Web Cons
     - **Root Directory**: Click "Edit" and select `ai_radio/web`. **(Crucial Step)**
 4.  **Environment Variables**:
     - `VITE_REGISTRY_URL`: Paste your Render URL (e.g., `https://keegan-registry.onrender.com`). **Do not add a trailing slash.**
+    - `VITE_REGISTRY_KEY`: Must match `KEEGAN_REGISTRY_KEY` if you keep creator mode locked.
 5.  **Deploy**: Click **Deploy**.
 
 ---
 
-## Part 3: Verify & Tighten Security
+## Part 3: Ingest (Fly.io)
+*Hosts MediaMTX for WebRTC/RTMP/HLS.*
+
+1) **Create the app**
+   - Go to Fly.io dashboard and create a new app.
+   - When prompted for **Current Working Directory**, set it to `ai_radio/ingest`.
+2) **Deploy**
+   - Run `fly launch` then `fly deploy`.
+3) **Use the Fly hostname**
+   - Example: `https://keegan-ingest.fly.dev`
+   - Plug this into the Render env vars listed above.
+
+---
+
+## Part 4: Verify & Tighten Security
 
 1.  **Test**: Open your new Vercel URL. You should see the Console. The "Regional Directory" should load (it might be empty initially).
 2.  **Tighten Backend**:
@@ -60,7 +79,7 @@ This guide covers deploying the **Registry Server** (Backend) and the **Web Cons
     - Set it to your Vercel URL (e.g., `https://keegan-radio.vercel.app`).
     - Save Changes.
 
-## Part 4: Connect Your Desktop Engine
+## Part 5: Connect Your Desktop Engine
 To make your local Keegan.exe report to this cloud registry:
 
 1.  Open `./src/config.h` (or generic configuration headers).
