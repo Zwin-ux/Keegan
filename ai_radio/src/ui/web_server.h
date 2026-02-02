@@ -48,6 +48,8 @@ private:
     std::string bridgeApiKey_;
     std::string registryApiKey_;
     std::string broadcastSecret_;
+    std::string stationToken_;
+    uint64_t stationTokenExpiryMs_ = 0;
     
     void run();
     void loadStationConfig();

@@ -245,6 +245,12 @@ function App() {
   const [pairingExpiresAt, setPairingExpiresAt] = useState<number | null>(null);
   const [pairingBusy, setPairingBusy] = useState(false);
   const [pairingError, setPairingError] = useState<string | null>(null);
+  const [exePairingCode, setExePairingCode] = useState('');
+  const [exePairingInput, setExePairingInput] = useState('');
+  const [exePairingExpiresAt, setExePairingExpiresAt] = useState<number | null>(null);
+  const [exePairingBusy, setExePairingBusy] = useState(false);
+  const [exePairingError, setExePairingError] = useState<string | null>(null);
+  const [exePairedStationId, setExePairedStationId] = useState('');
 
   const [hlsHealth, setHlsHealth] = useState<HlsHealth>({ status: 'idle' });
   const hlsSequenceRef = useRef<number | null>(null);
@@ -1057,6 +1063,56 @@ function App() {
     }
   }, [hostRegistryUrl, webHostStationId, REGISTRY_KEY]);
 
+  const startExePairing = useCallback(async () => {
+    setExePairingBusy(true);
+    setExePairingError(null);
+    try {
+      const res = await fetch(`${BRIDGE_URL}/api/pairing/start`, {
+        method: 'POST',
+        headers: bridgeHeaders({ 'Content-Type': 'application/json' }),
+      });
+      const body = await res.text();
+      const data = body ? JSON.parse(body) : {};
+      if (!res.ok) {
+        setExePairingError(data.error ? `Pairing start failed: ${data.error}` : 'Pairing start failed.');
+        return;
+      }
+      setExePairingCode(data.pairingCode || '');
+      setExePairingExpiresAt(data.expiresAtMs || null);
+    } catch {
+      setExePairingError('Unable to reach local bridge for pairing.');
+    } finally {
+      setExePairingBusy(false);
+    }
+  }, [bridgeHeaders, BRIDGE_URL]);
+
+  const claimExePairing = useCallback(async () => {
+    if (!exePairingInput.trim()) {
+      setExePairingError('Enter a pairing code.');
+      return;
+    }
+    setExePairingBusy(true);
+    setExePairingError(null);
+    try {
+      const res = await fetch(`${BRIDGE_URL}/api/pairing/claim`, {
+        method: 'POST',
+        headers: bridgeHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ pairingCode: exePairingInput.trim() }),
+      });
+      const body = await res.text();
+      const data = body ? JSON.parse(body) : {};
+      if (!res.ok) {
+        setExePairingError(data.error ? `Pairing claim failed: ${data.error}` : 'Pairing claim failed.');
+        return;
+      }
+      setExePairedStationId(data.stationId || '');
+    } catch {
+      setExePairingError('Unable to reach local bridge for pairing.');
+    } finally {
+      setExePairingBusy(false);
+    }
+  }, [bridgeHeaders, BRIDGE_URL, exePairingInput]);
+
   useEffect(() => {
     fetchBroadcastStatus();
     const interval = window.setInterval(fetchBroadcastStatus, 5000);
@@ -1194,6 +1250,7 @@ function App() {
   const tokenRemaining = broadcastTokenExpiry ? formatDurationMs(broadcastTokenExpiry - Date.now()) : null;
   const webHostRemaining = webHostExpiresAt ? formatDurationMs(webHostExpiresAt - Date.now()) : null;
   const pairingRemaining = pairingExpiresAt ? formatDurationMs(pairingExpiresAt - Date.now()) : null;
+  const exePairingRemaining = exePairingExpiresAt ? formatDurationMs(exePairingExpiresAt - Date.now()) : null;
   const hlsWindow = typeof hlsHealth.windowSeconds === 'number'
     ? formatDurationMs(hlsHealth.windowSeconds * 1000)
     : null;
@@ -1341,6 +1398,55 @@ function App() {
                     {m}
                   </button>
                 ))}
+              </div>
+
+              <div className="mt-6 panel-inset p-4">
+                <div className="kicker">EXE Pairing</div>
+                <div className="mt-2 text-sm text-muted">
+                  Claim a web-created station by entering its pairing code.
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <input
+                    value={exePairingInput}
+                    onChange={(e) => setExePairingInput(e.target.value)}
+                    placeholder="PAIRING CODE"
+                    className="field w-40"
+                  />
+                  <button
+                    onClick={claimExePairing}
+                    disabled={exePairingBusy}
+                    className="glass-button rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[color:var(--ion)] disabled:opacity-40"
+                  >
+                    Claim
+                  </button>
+                  <button
+                    onClick={startExePairing}
+                    disabled={exePairingBusy}
+                    className="glass-button rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-muted disabled:opacity-40"
+                  >
+                    Start pairing
+                  </button>
+                  {exePairingRemaining && (
+                    <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[color:var(--cloud)]">
+                      expires {exePairingRemaining}
+                    </span>
+                  )}
+                </div>
+                {exePairingCode && (
+                  <div className="mt-3 text-lg font-mono tracking-[0.5em] text-[color:var(--cloud)]">
+                    {exePairingCode}
+                  </div>
+                )}
+                {exePairedStationId && (
+                  <div className="mt-2 text-xs font-mono uppercase tracking-[0.2em] text-muted">
+                    Paired station: {exePairedStationId}
+                  </div>
+                )}
+                {exePairingError && (
+                  <div className="mt-2 text-xs font-mono uppercase tracking-[0.2em] text-ember">
+                    {exePairingError}
+                  </div>
+                )}
               </div>
             </div>
 

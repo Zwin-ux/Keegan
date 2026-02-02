@@ -81,3 +81,22 @@ The token is used as the stream key for RTMP/HLS.
 ### GET /api/broadcast/status
 Returns current session state (broadcasting, sessionId, timestamps, streamUrl). Requires auth if `KEEGAN_BRIDGE_KEY` is set.
 
+### POST /api/pairing/start
+Starts pairing for the current station by requesting a code from the registry.
+Requires registry URL to be configured and `KEEGAN_REGISTRY_KEY` if enabled.
+Response:
+```
+{ "pairingCode": "AB12CD", "expiresAtMs": 1738420000000 }
+```
+
+### POST /api/pairing/claim
+Claims a pairing code and stores a station token locally (used for registry updates).
+Body:
+```
+{ "pairingCode": "AB12CD" }
+```
+Response:
+```
+{ "ok": true, "stationId": "st_123", "expiresAtMs": 1738420000000 }
+```
+

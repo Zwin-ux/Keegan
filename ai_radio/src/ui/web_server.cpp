@@ -296,6 +296,44 @@ void writeCachedStationId(const std::string& id) {
     }
 }
 
+struct StationTokenCache {
+    std::string token;
+    uint64_t expiresAtMs = 0;
+};
+
+StationTokenCache readCachedStationToken() {
+    StationTokenCache out;
+    auto raw = readTextFile("cache/station_token.json");
+    if (raw.empty()) return out;
+    auto parsed = vjson::parse(raw);
+    if (!parsed.has_value() || !parsed->isObject()) return out;
+    const auto& root = *parsed;
+    if (root.has("token")) out.token = root["token"].asString("");
+    if (root.has("expiresAtMs")) {
+        out.expiresAtMs = static_cast<uint64_t>(root["expiresAtMs"].asNumber(0.0));
+    }
+    if (out.expiresAtMs > 0 && out.expiresAtMs < nowMs()) {
+        out.token.clear();
+        out.expiresAtMs = 0;
+    }
+    return out;
+}
+
+void writeCachedStationToken(const std::string& token, uint64_t expiresAtMs) {
+    std::filesystem::create_directories("cache");
+    std::ofstream f("cache/station_token.json", std::ios::binary);
+    if (!f.good()) return;
+    f << "{";
+    f << "\"token\":\"" << escapeJson(token) << "\",";
+    f << "\"expiresAtMs\":" << expiresAtMs;
+    f << "}";
+}
+
+void clearCachedStationToken() {
+    std::error_code ec;
+    std::filesystem::remove("cache/station_token.json", ec);
+}
+
 float getNumber(const vjson::Value& obj, const std::string& key, float def = 0.0f) {
     if (!obj.has(key)) return def;
     return obj[key].asFloat(def);
@@ -449,7 +487,7 @@ void WebServer::run() {
     auto addCors = [&](httplib::Response& res) {
         res.set_header("Access-Control-Allow-Origin", "*");
         res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Api-Key, X-Broadcast-Token");
+        res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Api-Key, X-Broadcast-Token, X-Station-Token");
     };
     auto requireAuth = [&](const httplib::Request& req, httplib::Response& res) {
         if (authorized(req, bridgeApiKey_)) return true;
@@ -744,6 +782,127 @@ void WebServer::run() {
         addCors(res);
     });
 
+    // Pairing start (creates code for current station)
+    svr.Post("/api/pairing/start", [&](const httplib::Request& req, httplib::Response& res) {
+        (void)req;
+        if (!requireAuth(req, res)) return;
+        std::string registryUrl;
+        std::string stationId;
+        {
+            std::lock_guard<std::mutex> lock(stationMutex_);
+            registryUrl = stationConfig_.registryUrl;
+            stationId = stationId_;
+        }
+        if (registryUrl.empty() || stationId.empty()) {
+            res.status = 400;
+            res.set_content("{\"error\":\"missing_registry_or_station\"}", "application/json");
+            addCors(res);
+            return;
+        }
+        httplib::Client cli(registryUrl.c_str());
+        cli.set_connection_timeout(2, 0);
+        cli.set_read_timeout(5, 0);
+        cli.set_write_timeout(5, 0);
+        httplib::Headers headers;
+        if (!registryApiKey_.empty()) {
+            headers.emplace("X-Api-Key", registryApiKey_);
+        }
+        std::string path = "/api/stations/" + stationId + "/pairing/start";
+        auto resp = cli.Post(path.c_str(), headers, "{}", "application/json");
+        if (!resp) {
+            res.status = 502;
+            res.set_content("{\"error\":\"registry_unreachable\"}", "application/json");
+            addCors(res);
+            return;
+        }
+        res.status = resp->status;
+        res.set_content(resp->body, "application/json");
+        addCors(res);
+    });
+
+    // Pairing claim (exchange code for station token)
+    svr.Post("/api/pairing/claim", [&](const httplib::Request& req, httplib::Response& res) {
+        if (!requireAuth(req, res)) return;
+        std::string registryUrl;
+        {
+            std::lock_guard<std::mutex> lock(stationMutex_);
+            registryUrl = stationConfig_.registryUrl;
+        }
+        if (registryUrl.empty()) {
+            res.status = 400;
+            res.set_content("{\"error\":\"missing_registry\"}", "application/json");
+            addCors(res);
+            return;
+        }
+        std::string pairingCode;
+        if (!req.body.empty()) {
+            auto parsed = vjson::parse(req.body);
+            if (parsed.has_value() && parsed->isObject()) {
+                const auto& root = *parsed;
+                if (root.has("pairingCode")) pairingCode = root["pairingCode"].asString("");
+            }
+        }
+        if (pairingCode.empty()) {
+            res.status = 400;
+            res.set_content("{\"error\":\"pairing_code_required\"}", "application/json");
+            addCors(res);
+            return;
+        }
+        httplib::Client cli(registryUrl.c_str());
+        cli.set_connection_timeout(2, 0);
+        cli.set_read_timeout(5, 0);
+        cli.set_write_timeout(5, 0);
+        std::stringstream body;
+        body << "{";
+        body << "\"pairingCode\":\"" << escapeJson(pairingCode) << "\"";
+        body << "}";
+        auto resp = cli.Post("/api/stations/pairing/claim", body.str(), "application/json");
+        if (!resp) {
+            res.status = 502;
+            res.set_content("{\"error\":\"registry_unreachable\"}", "application/json");
+            addCors(res);
+            return;
+        }
+        if (resp->status != 200) {
+            res.status = resp->status;
+            res.set_content(resp->body, "application/json");
+            addCors(res);
+            return;
+        }
+        auto parsed = vjson::parse(resp->body);
+        if (!parsed.has_value() || !parsed->isObject()) {
+            res.status = 500;
+            res.set_content("{\"error\":\"invalid_registry_response\"}", "application/json");
+            addCors(res);
+            return;
+        }
+        const auto& root = *parsed;
+        std::string stationId = root.has("stationId") ? root["stationId"].asString("") : "";
+        std::string token = root.has("stationToken") ? root["stationToken"].asString("") : "";
+        uint64_t expiresAt = root.has("expiresAtMs")
+            ? static_cast<uint64_t>(root["expiresAtMs"].asNumber(0.0))
+            : 0;
+        if (!stationId.empty() && !token.empty()) {
+            {
+                std::lock_guard<std::mutex> lock(stationMutex_);
+                stationId_ = stationId;
+                stationConfig_.id = stationId;
+                stationToken_ = token;
+                stationTokenExpiryMs_ = expiresAt;
+                writeCachedStationId(stationId);
+                writeCachedStationToken(token, expiresAt);
+            }
+        }
+        std::stringstream reply;
+        reply << "{";
+        reply << "\"ok\":true,";
+        reply << "\"stationId\":\"" << escapeJson(stationId) << "\",";
+        reply << "\"expiresAtMs\":" << expiresAt;
+        reply << "}";
+        res.set_content(reply.str(), "application/json");
+        addCors(res);
+    });
+
     // Deprecated SSE endpoint
     svr.Get("/api/events", [&](const httplib::Request& req, httplib::Response& res) {
         (void)req;
@@ -836,6 +995,12 @@ void WebServer::loadStationConfig() {
     if (broadcastSecret_.empty()) {
         broadcastSecret_ = "dev_secret";
     }
+
+    auto cachedToken = readCachedStationToken();
+    if (!cachedToken.token.empty()) {
+        stationToken_ = cachedToken.token;
+        stationTokenExpiryMs_ = cachedToken.expiresAtMs;
+    }
 }
 
 void WebServer::runRegistryClient() {
@@ -871,13 +1036,28 @@ void WebServer::runRegistryClient() {
 
         std::string payload = stationPayloadJson(cfg, state, stationId_, broadcasting, sessionId);
         httplib::Headers headers;
-        if (!registryApiKey_.empty()) {
+        bool tokenValid = false;
+        {
+            std::lock_guard<std::mutex> lock(stationMutex_);
+            if (!stationToken_.empty() && stationTokenExpiryMs_ > nowMs()) {
+                headers.emplace("X-Station-Token", stationToken_);
+                tokenValid = true;
+            }
+        }
+        if (!tokenValid && !registryApiKey_.empty()) {
             headers.emplace("X-Api-Key", registryApiKey_);
         }
         auto res = cli.Post("/api/stations", headers, payload, "application/json");
         if (!res) {
             util::logWarn("Registry: failed to reach registry server");
             return;
+        }
+        if (res->status == 401) {
+            util::logWarn("Registry: station token rejected, clearing");
+            std::lock_guard<std::mutex> lock(stationMutex_);
+            stationToken_.clear();
+            stationTokenExpiryMs_ = 0;
+            clearCachedStationToken();
         }
         if (res->status != 200) {
             util::logWarn("Registry: registry rejected update (status " + std::to_string(res->status) + ")");
