@@ -10,6 +10,7 @@ If `KEEGAN_REGISTRY_KEY` is set, all POST endpoints require:
 - `Authorization: Bearer <key>`
 
 Telemetry is opt-in. Set `KEEGAN_TELEMETRY=1` on the registry to enable `/api/telemetry` logging.
+Web hosting uses signed ingest tokens. Set `KEEGAN_INGEST_SECRET` (or `KEEGAN_BROADCAST_SECRET`) in production.
 
 ## Endpoints
 ### GET /api/stations
@@ -108,6 +109,46 @@ Response:
 ```
 { "ok": true, "stored": true }
 ```
+
+### POST /api/stations/web/begin
+Begins a web-hosted broadcast session (anonymous or creator).
+Body:
+```
+{
+  "mode": "anon" | "creator",
+  "station": {
+    "id": "optional-station-id",
+    "name": "Station Name",
+    "description": "Short description",
+    "region": "us-midwest",
+    "coverImage": "data:image/png;base64,..."
+  }
+}
+```
+Response:
+```
+{
+  "stationId": "anon",
+  "sessionId": "sess_...",
+  "token": "<signed token>",
+  "expiresAtMs": 1738420000000,
+  "ingest": {
+    "rtmpUrl": "rtmp://.../token",
+    "hlsUrl": "http://.../token/index.m3u8",
+    "webrtcUrl": "http://.../token"
+  }
+}
+```
+
+### POST /api/stations/web/stop
+Stops a web-hosted broadcast session.
+Body:
+```
+{ "token": "<signed token>" }
+```
+
+### GET /api/stations/<id>/status
+Returns broadcast session state (if active).
 
 ### GET /health
 Returns:

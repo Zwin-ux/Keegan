@@ -2,6 +2,10 @@
 
 This guide covers deploying the **Registry Server** (Backend) and the **Web Console** (Frontend).
 
+## Current Deployments (active)
+- Backend: https://keegan-qkgq.onrender.com
+- Frontend: https://keegan-khaki.vercel.app
+
 ## Prerequisites
 - [GitHub Account](https://github.com) (Repo pushed to GitHub)
 - [Render Account](https://render.com) (for Backend)
@@ -17,14 +21,15 @@ This guide covers deploying the **Registry Server** (Backend) and the **Web Cons
 3.  **Settings**:
     - **Name**: `keegan-registry`
     - **Region**: US East (or closest to you)
-    - **Root Directory**: `ai_radio`
+    - **Root Directory**: `ai_radio/server`
     - **Runtime**: **Python 3**
     - **Build Command**: `pip install -r requirements.txt` (it's empty now, but good practice)
-    - **Start Command**: `python server/registry_server.py` (or leave blank, it reads the `Procfile`)
+    - **Start Command**: `python registry_server.py`
     - **Plan**: Free
 4.  **Environment Variables**:
-    - `ALLOWED_ORIGINS`: `*` (TEMPORARY: allows any Vercel URL to connect. Tighten this later once you have your Vercel URL).
+    - `ALLOWED_ORIGINS`: `https://keegan-khaki.vercel.app` (or your Vercel URL)
     - `KEEGAN_REGISTRY_KEY`: `secret_admin_key_123` (Set your own secret for admin actions).
+    - `KEEGAN_INGEST_SECRET`: `secret_ingest_key_123` (Signs web-host tokens).
     - `PYTHONUNBUFFERED`: `true` (Ensures logs show up immediately).
     - `PORT`: `10000` (Render's default port).
 5.  **Deploy**: Click **Create Web Service**.
@@ -39,7 +44,7 @@ This guide covers deploying the **Registry Server** (Backend) and the **Web Cons
 2.  **Import**: Select your `Keegan` repository.
 3.  **Configure Project**:
     - **Framework Preset**: Vite
-    - **Root Directory**: Click "Edit" and select `web`. **(Crucial Step)**
+    - **Root Directory**: Click "Edit" and select `ai_radio/web`. **(Crucial Step)**
 4.  **Environment Variables**:
     - `VITE_REGISTRY_URL`: Paste your Render URL (e.g., `https://keegan-registry.onrender.com`). **Do not add a trailing slash.**
 5.  **Deploy**: Click **Deploy**.

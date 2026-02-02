@@ -376,6 +376,179 @@ Why: A public website cannot talk to a user's localhost. The local bridge stays 
 
 ---
 
+# Next Features Spec (Web-First Hosting + EXE as Power-Up)
+
+Goal: let creators host a show from the web without installing the EXE. The EXE remains an optional "vibe engine" that can enrich broadcasts locally.
+
+## 1) Web-Hosted Radio Shows (No EXE Required)
+
+### Concept
+Creators can start a station from the web UI using their mic, browser audio, or an RTMP encoder. This makes Frequency usable as a pure web platform.
+
+### Core flows
+1. **Create Station** (web): name, region, description, tags, cover image.
+2. **Go Live (Web)**: browser-based broadcast using WebRTC ingest.
+3. **Directory Listing**: station appears in the public registry with live status.
+4. **Listeners**: HLS/LL-HLS playback in the web UI.
+
+### Web ingest architecture
+- **Browser -> WebRTC ingest** (preferred for low setup):
+  - Web client gets a signed ingest token.
+  - Connects to a WebRTC ingest endpoint (MediaMTX v1).
+- **Encoder -> RTMP ingest** (fallback):
+  - Use tokenized RTMP URL.
+  - MediaMTX converts to HLS.
+
+### Minimal API needs
+```
+POST /api/stations/web/begin
+  -> { stationId, ingest: { webrtcUrl, rtmpUrl, hlsUrl }, sessionId, token, expiresAt }
+
+POST /api/stations/web/stop
+  -> { ok: true }
+
+GET /api/stations/:id/status
+  -> { broadcasting, uptimeMs, bitrateKbps, listeners }
+```
+
+### Permissions / Safety
+- Public reads, gated writes (registry key or creator auth).
+- Station-bound tokens to prevent cross-station reuse.
+- Rate limit presence + ingest requests.
+
+## 1.1) Anonymous Frequency (One Global Open Slot)
+
+### Concept
+There is a single anonymous station anyone can go live on without creating an account. It is the "open mic" of Frequency. It is not 24/7 and is intentionally temporary.
+
+### Rules
+- Only one anonymous station exists (global), listed as `anon`.
+- One live host at a time (single active session).
+- If the host disconnects, the station goes idle after 60 seconds.
+- Max live session length: **4 minutes** (tight, spontaneous drops).
+- Cooldown per IP/device (default 10 minutes) after a session ends.
+
+### UX flow
+1. Click "Go Live (Anonymous)" in the Host panel.
+2. Receive a short-lived token (10 min).
+3. Start broadcasting via WebRTC.
+4. Station appears immediately in the directory as "Anonymous Frequency".
+
+### Visuals
+- Anonymous hosts can upload a temporary cover image.
+- If none is provided, a fixed anonymous avatar is used.
+
+### Tokening
+- `stationId = anon`
+- Token scope: `station:anon`, `sessionId`, `exp`.
+- Token is invalid if a different session is active.
+
+### Moderation (soft)
+- Basic rate limits + session duration caps.
+- Manual kill switch (admin key) to stop a session.
+
+## 1.2) Creator Stations (24/7)
+
+### Concept
+Persistent stations require a creator profile. This enables 24/7 hosting, stable station IDs, and future monetization.
+
+### Minimal creator profile (v1)
+- Handle + email (or magic link).
+- Station name, description, region, tags.
+- Optional cover image.
+
+### Rules
+- Creator stations can run indefinitely.
+- Multiple sessions per station are not allowed without explicit co-host roles.
+- Creator stations can set default schedule or "always on".
+
+### Monetization (later)
+- Paid 24/7 slots or boosted directory placement.
+- Tips/subscriptions for hosts.
+
+## 2) EXE as "Vibe Engine" Add-On
+
+### Concept
+EXE becomes a local enhancer: audio textures, procedural ambience, and optional co-host voice layers. It can publish into a web-hosted show.
+
+### EXE features
+- **Vibe Layer Output**: EXE generates an audio layer and publishes as RTMP.
+- **Mood Automation**: auto-mood shifts based on app focus.
+- **Local DSP**: provides an "analog warmth" profile to the stream.
+
+### Integration idea
+- Web station can "attach" a vibe engine:
+  - EXE authenticates and claims a station.
+  - EXE can update station mood/energy in registry.
+
+## 3) Web Host Studio (UI)
+
+### Panel layout
+- **Mic input + levels**
+- **Live status + uptime**
+- **Station metadata**
+- **Audience metrics** (listeners, region map)
+- **Co-host link** (invite link to join broadcast)
+
+### MVP: Web Audio Mixer
+- 1 mic input
+- 1 music bed (local file upload or stream URL)
+- Simple compressor + limiter in browser
+
+## 4) Open Hosting Pipeline (Server)
+
+### Minimal stack
+- **Registry** (Render): stations/rooms/listeners
+- **Ingest** (MediaMTX on Render/Fly): RTMP + WebRTC -> HLS
+- **Web UI** (Vercel): host/monitor/listen
+
+### Deployment targets (v1)
+- MediaMTX on Render/Fly for ingest.
+- HLS served from the ingest service.
+- Vercel web app reads public registry + HLS URLs.
+
+## 5) Next Engineering Milestones
+
+### Phase A: Web Host MVP
+- Web UI "Host a station" flow.
+- WebRTC ingest token issuance.
+- Registry station create + heartbeat.
+
+### Phase B: Vibe Engine Link
+- EXE station claim flow (token + stationId).
+- EXE posts mood/energy/now-playing.
+
+### Phase C: Social Broadcasts
+- Co-host join links with roles (host/cohost/producer).
+- Chat or "Signal pulse" reactions.
+
+---
+
+# Decisions (v1 defaults)
+
+- Ingest: WebRTC-first, RTMP fallback.
+- Ingest server: MediaMTX.
+- Listing: instant for now.
+- Anonymous: one global open station (single active host).
+- Creator requirement: only for persistent 24/7 stations.
+- Co-hosts: single-host only in v1 (roles added later).
+
+## Scale targets (v1 demo)
+- 20 concurrent stations (including anon)
+- 150 concurrent listeners
+- 5 active hosts at the same time
+
+---
+
+# Open Questions (Answer these to finalize the roadmap)
+
+1) Anonymous frequency: should it be **global** or **one per region**?
+2) Anonymous station time limit: keep 30 minutes or change it?
+3) Should anonymous hosts be able to upload a cover image, or keep it fixed?
+4) Do we allow co-hosts in v1, or keep it single-host only?
+
+---
+
 # Frequency Console UI Overhaul (Spec v2)
 
 Goal: make the web console feel like a real radio control desk, not a generic dashboard. The UI should feel tactile, dense, and intentional. It should look hand-designed with a distinct palette, strong typography, and analog-inspired details.

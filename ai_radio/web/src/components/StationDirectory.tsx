@@ -7,6 +7,7 @@ export interface Station {
   frequency?: number;
   description?: string;
   streamUrl?: string;
+  coverImage?: string;
   status?: string;
   mood?: string;
   energy?: number;
@@ -138,11 +139,22 @@ export const StationDirectory: React.FC<StationDirectoryProps> = ({
                   className={`card w-full px-5 py-4 text-left ${active ? 'card-active' : ''}`}
                 >
                   <div className="flex items-center justify-between">
-                    <div>
-                      <div className="kicker">
-                        {station.frequency ? `${station.frequency.toFixed(1)} MHz` : 'Unlisted'}
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                        {station.coverImage ? (
+                          <img src={station.coverImage} alt={station.name ?? station.id} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[10px] font-mono uppercase tracking-[0.2em] text-muted">
+                            FM
+                          </div>
+                        )}
                       </div>
-                      <div className="title mt-1 text-lg">{station.name ?? station.id}</div>
+                      <div>
+                        <div className="kicker">
+                          {station.frequency ? `${station.frequency.toFixed(1)} MHz` : 'Unlisted'}
+                        </div>
+                        <div className="title mt-1 text-lg">{station.name ?? station.id}</div>
+                      </div>
                     </div>
                     <div className="flex items-center gap-3 text-[10px] font-mono uppercase tracking-[0.2em] text-muted">
                       <span className={`h-2 w-2 rounded-full ${statusColor}`} />

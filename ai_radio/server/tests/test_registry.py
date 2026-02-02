@@ -12,6 +12,9 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 # Enable telemetry before importing the server module
 os.environ['KEEGAN_TELEMETRY'] = '1'
 os.environ['ALLOWED_ORIGINS'] = '*'
+os.environ['KEEGAN_ANON_SESSION_MS'] = '200'
+os.environ['KEEGAN_ANON_COOLDOWN_MS'] = '200'
+os.environ['KEEGAN_INGEST_SECRET'] = 'test-secret'
 
 import registry_server as registry
 
@@ -33,15 +36,24 @@ class RegistryTests(unittest.TestCase):
     def url(self, path):
         return f'http://127.0.0.1:{self.port}{path}'
 
-    def request_json(self, path, method='GET', payload=None):
+    def request_json(self, path, method='GET', payload=None, headers=None):
         data = None
         if payload is not None:
             data = json.dumps(payload).encode('utf-8')
         req = request.Request(self.url(path), data=data, method=method)
         req.add_header('Content-Type', 'application/json')
-        with request.urlopen(req, timeout=3) as resp:
-            body = resp.read().decode('utf-8')
-            return resp.status, json.loads(body) if body else {}
+        if headers:
+            for key, value in headers.items():
+                req.add_header(key, value)
+        try:
+            with request.urlopen(req, timeout=3) as resp:
+                body = resp.read().decode('utf-8')
+                return resp.status, json.loads(body) if body else {}
+        except Exception as exc:
+            if hasattr(exc, 'code'):
+                body = exc.read().decode('utf-8') if hasattr(exc, 'read') else ''
+                return exc.code, json.loads(body) if body else {}
+            raise
 
     def test_health(self):
         status, payload = self.request_json('/health')
@@ -93,6 +105,50 @@ class RegistryTests(unittest.TestCase):
         })
         self.assertEqual(status, 200)
         self.assertTrue(payload.get('ok'))
+
+    def test_web_anon_begin_and_cooldown(self):
+        status, payload = self.request_json(
+            '/api/stations/web/begin',
+            method='POST',
+            payload={'mode': 'anon', 'station': {'region': 'us-midwest'}},
+            headers={'X-Client-Id': 'client_a'},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload.get('stationId'), 'anon')
+        token = payload.get('token')
+        self.assertTrue(token)
+
+        status, payload = self.request_json(
+            '/api/stations/web/begin',
+            method='POST',
+            payload={'mode': 'anon'},
+            headers={'X-Client-Id': 'client_b'},
+        )
+        self.assertEqual(status, 409)
+
+        status, payload = self.request_json(
+            '/api/stations/web/stop',
+            method='POST',
+            payload={'token': token},
+        )
+        self.assertEqual(status, 200)
+
+        status, payload = self.request_json(
+            '/api/stations/web/begin',
+            method='POST',
+            payload={'mode': 'anon'},
+            headers={'X-Client-Id': 'client_a'},
+        )
+        self.assertEqual(status, 429)
+
+        time.sleep(0.25)
+        status, payload = self.request_json(
+            '/api/stations/web/begin',
+            method='POST',
+            payload={'mode': 'anon'},
+            headers={'X-Client-Id': 'client_a'},
+        )
+        self.assertEqual(status, 200)
 
 
 if __name__ == '__main__':

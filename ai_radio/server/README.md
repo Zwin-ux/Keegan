@@ -14,6 +14,9 @@ Default port: 8090
 Set `KEEGAN_REGISTRY_KEY` to require API keys for POST requests.
 Set `ALLOWED_ORIGINS` (comma-separated) to allow custom web UI origins. Wildcards like `*.vercel.app` are supported.
 Set `KEEGAN_TELEMETRY=1` to enable `/api/telemetry` logging (writes JSONL to `server/data`).
+Set `KEEGAN_INGEST_SECRET` to sign web-host ingest tokens.
+Set `KEEGAN_INGEST_RTMP_BASE`, `KEEGAN_INGEST_HLS_BASE`, `KEEGAN_INGEST_WEBRTC_BASE` for hosted ingest URLs.
+Anonymous mode tuning: `KEEGAN_ANON_SESSION_MS` (default 240000), `KEEGAN_ANON_COOLDOWN_MS` (default 600000).
 
 ## API
 - GET /api/stations
@@ -27,6 +30,9 @@ Set `KEEGAN_TELEMETRY=1` to enable `/api/telemetry` logging (writes JSONL to `se
 - POST /api/rooms/<roomId>/presence
 - POST /api/telemetry
 - GET /health
+- POST /api/stations/web/begin
+- POST /api/stations/web/stop
+- GET /api/stations/<id>/status
 
 ## UI
 Open http://localhost:8090/ to view the directory.

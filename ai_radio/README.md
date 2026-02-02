@@ -5,8 +5,8 @@
 Frequency is the listener-facing name for Keegan - a tray-first local radio engine that weaves moods instead of playlists. It lives in the Windows system tray, runs offline, and drifts through stems, procedural synth, and tiny whispered stories.
 
 Website (local registry UI): http://localhost:8090/  
-Website (production): https://YOUR-VERCEL-APP.vercel.app  
-Registry (production): https://YOUR-RENDER-APP.onrender.com
+Website (production): https://keegan-khaki.vercel.app  
+Registry (production): https://keegan-qkgq.onrender.com
 
 ## Visuals
 ![Radioverse Console](assets/console_preview.png)
@@ -72,14 +72,14 @@ Current Endpoints:
 1) **Registry on Render**
    - Uses `render.yaml` (root).
    - Env:
-     - `ALLOWED_ORIGINS=https://YOUR-VERCEL-APP.vercel.app,http://localhost:5173`
+    - `ALLOWED_ORIGINS=https://keegan-khaki.vercel.app,http://localhost:5173`
      - `KEEGAN_REGISTRY_KEY` (optional, protects POST)
      - `KEEGAN_TELEMETRY=1` (optional)
 
 2) **Web UI on Vercel**
    - Set root directory to `ai_radio/web`.
    - Env:
-     - `VITE_REGISTRY_URL=https://YOUR-RENDER-APP.onrender.com`
+    - `VITE_REGISTRY_URL=https://keegan-qkgq.onrender.com`
      - `VITE_REGISTRY_KEY` (optional)
      - `VITE_BRIDGE_URL` / `VITE_BRIDGE_KEY` if you are wiring a local EXE bridge
 
@@ -130,6 +130,7 @@ python ai_radio/tools/telemetry_summary.py
 ## Config knobs (quick)
 - Web UI: `VITE_REGISTRY_URL` (default `http://localhost:8090`), `VITE_REGISTRY_KEY` (optional), `VITE_BRIDGE_URL` (default `http://localhost:3000`), `VITE_BRIDGE_KEY` (optional)
 - Registry: `ALLOWED_ORIGINS` (comma-separated, default allows localhost ports), `KEEGAN_TELEMETRY=1` (enable JSONL telemetry logging)
+- Web ingest: `KEEGAN_INGEST_SECRET`, `KEEGAN_INGEST_RTMP_BASE`, `KEEGAN_INGEST_HLS_BASE`, `KEEGAN_INGEST_WEBRTC_BASE`
 
 ## Repo map
 - `assets/` - logo and bundled stems/tones (includes Sleep Ship placeholders and synth preset).

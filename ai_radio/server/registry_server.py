@@ -1,8 +1,12 @@
+import base64
+import hashlib
+import hmac
 import json
 import os
 import random
 import time
 import threading
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -13,7 +17,21 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), 'static')
 
 DEFAULT_REGION = os.environ.get('KEEGAN_DEFAULT_REGION', 'us-midwest')
 REGISTRY_KEY = os.environ.get('KEEGAN_REGISTRY_KEY')
-REGISTRY_VERSION = os.environ.get('REGISTRY_VERSION', '0.2.0')
+REGISTRY_VERSION = os.environ.get('REGISTRY_VERSION', '0.3.0')
+
+INGEST_SECRET = (
+    os.environ.get('KEEGAN_INGEST_SECRET')
+    or os.environ.get('KEEGAN_BROADCAST_SECRET')
+    or os.environ.get('KEEGAN_REGISTRY_KEY')
+    or 'dev-secret'
+)
+INGEST_RTMP_BASE = os.environ.get('KEEGAN_INGEST_RTMP_BASE', 'rtmp://localhost/live')
+INGEST_HLS_BASE = os.environ.get('KEEGAN_INGEST_HLS_BASE', 'http://localhost:8888/live')
+INGEST_WEBRTC_BASE = os.environ.get('KEEGAN_INGEST_WEBRTC_BASE', 'http://localhost:8889/live')
+
+ANON_SESSION_MS = int(os.environ.get('KEEGAN_ANON_SESSION_MS', str(4 * 60 * 1000)))
+ANON_COOLDOWN_MS = int(os.environ.get('KEEGAN_ANON_COOLDOWN_MS', str(10 * 60 * 1000)))
+CREATOR_SESSION_MS = int(os.environ.get('KEEGAN_CREATOR_SESSION_MS', str(12 * 60 * 60 * 1000)))
 
 DEFAULT_ALLOWED_ORIGINS = [
     'http://localhost:3000',
@@ -62,6 +80,43 @@ def append_telemetry(event):
     with open(telemetry_path(), 'a', encoding='utf-8') as f:
         f.write(json.dumps(event) + '\n')
     return True
+
+
+def _b64url_encode(raw):
+    return base64.urlsafe_b64encode(raw).rstrip(b'=').decode('utf-8')
+
+
+def _b64url_decode(raw):
+    padding = '=' * (-len(raw) % 4)
+    return base64.urlsafe_b64decode(raw + padding)
+
+
+def _sign_message(message):
+    digest = hmac.new(INGEST_SECRET.encode('utf-8'), message.encode('utf-8'), hashlib.sha256).digest()
+    return _b64url_encode(digest)
+
+
+def make_ingest_token(payload):
+    raw = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+    body = _b64url_encode(raw)
+    signature = _sign_message(body)
+    return f"{body}.{signature}"
+
+
+def verify_ingest_token(token):
+    if not token or '.' not in token:
+        return None
+    body, signature = token.split('.', 1)
+    expected = _sign_message(body)
+    if not hmac.compare_digest(signature, expected):
+        return None
+    try:
+        payload = json.loads(_b64url_decode(body).decode('utf-8'))
+    except Exception:
+        return None
+    if payload.get('exp') and payload['exp'] < now_ms():
+        return None
+    return payload
 
 
 class StationStore:
@@ -181,6 +236,35 @@ class StationStore:
             self.listeners[station_id] = listeners
             count = self._prune_listeners(station_id)
             return {'listenerId': listener_id, 'listenerCount': count}
+
+    def set_broadcast(self, station_id, broadcasting, stream_url=None, session_id=None, mode=None, metadata=None):
+        with self.lock:
+            station = self.stations.get(station_id, {})
+            if not station:
+                station = {'id': station_id}
+            if metadata:
+                station.update(metadata)
+            station['broadcasting'] = bool(broadcasting)
+            station['status'] = 'live' if broadcasting else 'idle'
+            station['updatedAt'] = now_ms()
+            station['lastSeen'] = now_ms()
+            if broadcasting:
+                if stream_url:
+                    station['streamUrl'] = stream_url
+                if session_id:
+                    station['broadcastSessionId'] = session_id
+                if mode:
+                    station['broadcastMode'] = mode
+                station['broadcastStartedAtMs'] = now_ms()
+            else:
+                station['broadcastSessionId'] = None
+                station['broadcastMode'] = None
+                station['broadcastEndedAtMs'] = now_ms()
+            self.stations[station_id] = station
+            self.save()
+            copy = dict(station)
+            copy['listenerCount'] = self._prune_listeners(station_id)
+            return copy
 
 
 STORE = StationStore()
@@ -303,6 +387,121 @@ class RoomStore:
 ROOMS = RoomStore()
 
 
+class IngestSessionStore:
+    def __init__(self):
+        self.sessions = {}
+        self.station_sessions = {}
+        self.cooldowns = {}
+        self.lock = threading.Lock()
+
+    def _ingest_urls(self, token):
+        rtmp = f"{INGEST_RTMP_BASE.rstrip('/')}/{token}"
+        hls = f"{INGEST_HLS_BASE.rstrip('/')}/{token}/index.m3u8"
+        webrtc = f"{INGEST_WEBRTC_BASE.rstrip('/')}/{token}"
+        return {
+            'rtmpUrl': rtmp,
+            'hlsUrl': hls,
+            'webrtcUrl': webrtc,
+        }
+
+    def _active_session(self, station_id):
+        session_id = self.station_sessions.get(station_id)
+        if not session_id:
+            return None
+        return self.sessions.get(session_id)
+
+    def _cleanup_expired(self):
+        now = now_ms()
+        expired = [sid for sid, sess in self.sessions.items() if sess.get('endsAtMs') and sess['endsAtMs'] <= now]
+        for sid in expired:
+            self._end_session_locked(sid, reason='expired')
+
+    def _end_session_locked(self, session_id, reason='stopped'):
+        session = self.sessions.pop(session_id, None)
+        if not session:
+            return None
+        station_id = session['stationId']
+        if self.station_sessions.get(station_id) == session_id:
+            self.station_sessions.pop(station_id, None)
+        if session.get('mode') == 'anon':
+            client_id = session.get('clientId')
+            if client_id:
+                self.cooldowns[client_id] = now_ms()
+        STORE.set_broadcast(station_id, False, metadata={'broadcastStopReason': reason})
+        return session
+
+    def begin(self, station_id, mode, client_id, duration_ms, metadata, allow_replace=False):
+        with self.lock:
+            self._cleanup_expired()
+            existing = self._active_session(station_id)
+            if existing and not allow_replace:
+                return None, {'error': 'already_live', 'status': 409}
+            if mode == 'anon':
+                last_end = self.cooldowns.get(client_id)
+                if last_end and now_ms() - last_end < ANON_COOLDOWN_MS:
+                    return None, {'error': 'cooldown', 'status': 429}
+            session_id = f"sess_{uuid.uuid4().hex[:12]}"
+            starts_at = now_ms()
+            ends_at = starts_at + duration_ms if duration_ms else None
+            payload = {
+                'stationId': station_id,
+                'sessionId': session_id,
+                'mode': mode,
+                'exp': ends_at or (starts_at + CREATOR_SESSION_MS),
+            }
+            token = make_ingest_token(payload)
+            session = {
+                'stationId': station_id,
+                'sessionId': session_id,
+                'mode': mode,
+                'clientId': client_id,
+                'startedAtMs': starts_at,
+                'endsAtMs': ends_at,
+                'token': token,
+            }
+            self.sessions[session_id] = session
+            self.station_sessions[station_id] = session_id
+            ingest = self._ingest_urls(token)
+            STORE.set_broadcast(station_id, True, stream_url=ingest['hlsUrl'], session_id=session_id, mode=mode, metadata=metadata)
+            return {
+                'session': session,
+                'ingest': ingest,
+                'stationId': station_id,
+                'token': token,
+            }, None
+
+    def stop(self, token=None, station_id=None, session_id=None):
+        with self.lock:
+            self._cleanup_expired()
+            resolved = None
+            if token:
+                payload = verify_ingest_token(token)
+                if not payload:
+                    return None, {'error': 'invalid_token', 'status': 401}
+                station_id = payload.get('stationId')
+                session_id = payload.get('sessionId')
+            if session_id:
+                resolved = session_id
+            elif station_id:
+                active = self._active_session(station_id)
+                resolved = active['sessionId'] if active else None
+            if not resolved:
+                return None, {'error': 'not_found', 'status': 404}
+            session = self._end_session_locked(resolved, reason='stopped')
+            return session, None
+
+    def status(self, station_id):
+        with self.lock:
+            self._cleanup_expired()
+            session = self._active_session(station_id)
+            if not session:
+                return None
+            return dict(session)
+
+
+SESSIONS = IngestSessionStore()
+
+
 class RegistryHandler(BaseHTTPRequestHandler):
     def _origin_allowed(self, origin):
         if '*' in ALLOWED_ORIGINS:
@@ -345,7 +544,7 @@ class RegistryHandler(BaseHTTPRequestHandler):
             if origin != '*':
                 self.send_header('Vary', 'Origin')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Api-Key')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Api-Key, X-Client-Id, X-Session-Id')
 
     def _send_json(self, status, payload):
         self.send_response(status)
@@ -400,6 +599,22 @@ class RegistryHandler(BaseHTTPRequestHandler):
 
         if parsed.path.startswith('/api/stations/'):
             station_id = parsed.path.split('/api/stations/')[1]
+            if station_id.endswith('/status'):
+                station_id = station_id.split('/status')[0]
+                session = SESSIONS.status(station_id)
+                station = STORE.get(station_id)
+                if not station:
+                    self._send_json(404, {'error': 'not_found'})
+                    return
+                payload = {
+                    'stationId': station_id,
+                    'broadcasting': station.get('broadcasting', False),
+                    'startedAtMs': session.get('startedAtMs') if session else station.get('broadcastStartedAtMs'),
+                    'endsAtMs': session.get('endsAtMs') if session else None,
+                    'sessionId': session.get('sessionId') if session else None,
+                }
+                self._send_json(200, payload)
+                return
             station = STORE.get(station_id)
             if not station:
                 self._send_json(404, {'error': 'not_found'})
@@ -424,6 +639,99 @@ class RegistryHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path == '/api/stations/web/begin':
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length) if length > 0 else b'{}'
+            try:
+                payload = json.loads(body.decode('utf-8'))
+            except Exception:
+                self._send_json(400, {'error': 'invalid_json'})
+                return
+            mode = payload.get('mode', 'creator')
+            station_payload = payload.get('station') or {}
+            station_id = station_payload.get('id')
+            if station_id == 'anon' or mode == 'anon':
+                mode = 'anon'
+                station_id = 'anon'
+                station_payload.setdefault('name', 'Anonymous Frequency')
+                station_payload.setdefault('description', 'Open mic drop (4 minutes).')
+                station_payload.setdefault('region', DEFAULT_REGION)
+            else:
+                mode = 'creator'
+                if REGISTRY_KEY and not self._authorized():
+                    self._send_json(401, {'error': 'unauthorized'})
+                    return
+
+            client_id = (
+                self.headers.get('X-Client-Id')
+                or payload.get('clientId')
+                or self.headers.get('X-Session-Id')
+                or self.client_address[0]
+            )
+
+            if mode == 'creator':
+                station = STORE.upsert(station_payload)
+                station_id = station.get('id')
+            else:
+                station = STORE.upsert({**station_payload, 'id': station_id, 'status': 'live'})
+
+            duration_ms = ANON_SESSION_MS if mode == 'anon' else CREATOR_SESSION_MS
+            result, error = SESSIONS.begin(
+                station_id=station_id,
+                mode=mode,
+                client_id=client_id,
+                duration_ms=duration_ms,
+                metadata={
+                    'name': station.get('name'),
+                    'description': station.get('description'),
+                    'coverImage': station.get('coverImage'),
+                    'region': station.get('region'),
+                },
+            )
+            if error:
+                self._send_json(error.get('status', 400), error)
+                return
+
+            session = result['session']
+            ingest = result['ingest']
+            append_telemetry({
+                'event': 'web_broadcast_start',
+                'stationId': station_id,
+                'mode': mode,
+                'sessionId': session.get('sessionId'),
+            })
+            self._send_json(200, {
+                'stationId': result['stationId'],
+                'sessionId': session.get('sessionId'),
+                'token': result['token'],
+                'expiresAtMs': session.get('endsAtMs') or session.get('startedAtMs'),
+                'ingest': ingest,
+                'station': STORE.get(station_id),
+            })
+            return
+
+        if parsed.path == '/api/stations/web/stop':
+            length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(length) if length > 0 else b'{}'
+            try:
+                payload = json.loads(body.decode('utf-8'))
+            except Exception:
+                payload = {}
+            token = payload.get('token') or self.headers.get('X-Broadcast-Token')
+            station_id = payload.get('stationId')
+            session_id = payload.get('sessionId')
+            session, error = SESSIONS.stop(token=token, station_id=station_id, session_id=session_id)
+            if error:
+                self._send_json(error.get('status', 400), error)
+                return
+            append_telemetry({
+                'event': 'web_broadcast_stop',
+                'stationId': session.get('stationId') if session else station_id,
+                'sessionId': session.get('sessionId') if session else session_id,
+            })
+            self._send_json(200, {'ok': True, 'sessionId': session.get('sessionId') if session else None})
+            return
+
         if parsed.path == '/api/stations':
             if not self._authorized():
                 self._send_json(401, {'error': 'unauthorized'})

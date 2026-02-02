@@ -31,6 +31,12 @@ type IngestInfo = {
   protocols?: string[];
 };
 
+type WebHostIngest = {
+  rtmpUrl?: string;
+  hlsUrl?: string;
+  webrtcUrl?: string;
+};
+
 type HlsHealth = {
   status: 'idle' | 'ok' | 'stalled' | 'error';
   bitrateKbps?: number;
@@ -224,6 +230,18 @@ function App() {
   const [ingestError, setIngestError] = useState<string | null>(null);
   const [ingestBusy, setIngestBusy] = useState(false);
 
+  const [webHostMode, setWebHostMode] = useState<'anon' | 'creator'>('anon');
+  const [webHostStationId, setWebHostStationId] = useState('');
+  const [webHostName, setWebHostName] = useState('');
+  const [webHostDescription, setWebHostDescription] = useState('');
+  const [webHostCover, setWebHostCover] = useState('');
+  const [webHostToken, setWebHostToken] = useState('');
+  const [webHostExpiresAt, setWebHostExpiresAt] = useState<number | null>(null);
+  const [webHostIngest, setWebHostIngest] = useState<WebHostIngest | null>(null);
+  const [webHostBusy, setWebHostBusy] = useState(false);
+  const [webHostError, setWebHostError] = useState<string | null>(null);
+  const [webHostSessionId, setWebHostSessionId] = useState('');
+
   const [hlsHealth, setHlsHealth] = useState<HlsHealth>({ status: 'idle' });
   const hlsSequenceRef = useRef<number | null>(null);
   const hlsStaleRef = useRef(0);
@@ -246,6 +264,10 @@ function App() {
   }, [registrySource, customRegistryUrl]);
 
   const telemetryRegistryUrl = useMemo(() => {
+    return registrySource === 'mixed' ? registryConfig.publicUrl : registryConfig.primaryUrl;
+  }, [registrySource, registryConfig]);
+
+  const hostRegistryUrl = useMemo(() => {
     return registrySource === 'mixed' ? registryConfig.publicUrl : registryConfig.primaryUrl;
   }, [registrySource, registryConfig]);
 
@@ -904,6 +926,104 @@ function App() {
     }
   }, [bridgeHeaders, broadcastToken, fetchBroadcastStatus, BRIDGE_URL]);
 
+  const handleCoverFile = useCallback((file?: File | null) => {
+    if (!file) return;
+    if (file.size > 350000) {
+      setWebHostError('Cover image too large (max 350KB).');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setWebHostCover(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const beginWebHost = useCallback(async () => {
+    setWebHostBusy(true);
+    setWebHostError(null);
+    const stationPayload: Record<string, any> = {
+      name: webHostMode === 'anon' ? 'Anonymous Frequency' : webHostName || 'Untitled Station',
+      description: webHostDescription || (webHostMode === 'anon' ? 'Open mic drop (4 minutes).' : ''),
+      region,
+    };
+    if (webHostCover) stationPayload.coverImage = webHostCover;
+    if (webHostMode === 'creator' && webHostStationId.trim()) {
+      stationPayload.id = webHostStationId.trim();
+    }
+
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-Client-Id': sessionIdRef.current };
+      if (REGISTRY_KEY && webHostMode === 'creator') headers['X-Api-Key'] = REGISTRY_KEY;
+      const res = await fetch(`${hostRegistryUrl}/api/stations/web/begin`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ mode: webHostMode, station: stationPayload, clientId: sessionIdRef.current }),
+      });
+      const bodyText = await res.text();
+      const data = bodyText ? JSON.parse(bodyText) : {};
+      if (!res.ok) {
+        setWebHostError(data.error ? `Web host rejected: ${data.error}` : 'Unable to start web host.');
+        return;
+      }
+      setWebHostStationId(data.stationId || stationPayload.id || '');
+      setWebHostSessionId(data.sessionId || '');
+      setWebHostToken(data.token || '');
+      setWebHostExpiresAt(data.expiresAtMs || null);
+      setWebHostIngest(data.ingest || null);
+    } catch {
+      setWebHostError('Unable to reach registry for web host.');
+    } finally {
+      setWebHostBusy(false);
+    }
+  }, [
+    hostRegistryUrl,
+    webHostMode,
+    webHostName,
+    webHostDescription,
+    webHostCover,
+    webHostStationId,
+    region,
+    REGISTRY_KEY,
+  ]);
+
+  const stopWebHost = useCallback(async () => {
+    if (!webHostToken && !webHostStationId) {
+      setWebHostError('No active web host session.');
+      return;
+    }
+    setWebHostBusy(true);
+    setWebHostError(null);
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-Client-Id': sessionIdRef.current };
+      if (REGISTRY_KEY && webHostMode === 'creator') headers['X-Api-Key'] = REGISTRY_KEY;
+      const res = await fetch(`${hostRegistryUrl}/api/stations/web/stop`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          token: webHostToken || undefined,
+          stationId: webHostStationId || undefined,
+          sessionId: webHostSessionId || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        setWebHostError(body ? `Stop failed: ${body}` : 'Unable to stop web host.');
+        return;
+      }
+      setWebHostToken('');
+      setWebHostExpiresAt(null);
+      setWebHostIngest(null);
+      setWebHostSessionId('');
+    } catch {
+      setWebHostError('Unable to reach registry for web host stop.');
+    } finally {
+      setWebHostBusy(false);
+    }
+  }, [hostRegistryUrl, webHostToken, webHostStationId, webHostSessionId, REGISTRY_KEY, webHostMode]);
+
   useEffect(() => {
     fetchBroadcastStatus();
     const interval = window.setInterval(fetchBroadcastStatus, 5000);
@@ -1039,6 +1159,7 @@ function App() {
     ? formatDurationMs(Date.now() - broadcastStatus.startedAtMs)
     : '0s';
   const tokenRemaining = broadcastTokenExpiry ? formatDurationMs(broadcastTokenExpiry - Date.now()) : null;
+  const webHostRemaining = webHostExpiresAt ? formatDurationMs(webHostExpiresAt - Date.now()) : null;
   const hlsWindow = typeof hlsHealth.windowSeconds === 'number'
     ? formatDurationMs(hlsHealth.windowSeconds * 1000)
     : null;
@@ -1187,6 +1308,140 @@ function App() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="panel p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="kicker">Web Host</div>
+                  <div className="title mt-2 text-xl">Frequency Studio</div>
+                </div>
+                <span className={`chip ${webHostToken ? 'chip-active' : ''}`}>
+                  <span className={`h-2 w-2 rounded-full ${webHostToken ? 'bg-emerald-400' : 'bg-white/40'}`} />
+                  {webHostToken ? 'live' : 'idle'}
+                </span>
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setWebHostMode('anon')}
+                  className={`tab-button ${webHostMode === 'anon' ? 'active' : ''}`}
+                >
+                  Anonymous
+                </button>
+                <button
+                  onClick={() => setWebHostMode('creator')}
+                  className={`tab-button ${webHostMode === 'creator' ? 'active' : ''}`}
+                >
+                  Creator
+                </button>
+                {webHostMode === 'anon' && (
+                  <span className="text-xs font-mono uppercase tracking-[0.2em] text-muted">
+                    4 min drop
+                  </span>
+                )}
+                {webHostMode === 'creator' && (
+                  <span className="text-xs font-mono uppercase tracking-[0.2em] text-muted">
+                    24/7 ready
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-4 grid gap-3">
+                <input
+                  value={webHostName}
+                  onChange={(e) => setWebHostName(e.target.value)}
+                  placeholder={webHostMode === 'anon' ? 'Anonymous Frequency' : 'Station name'}
+                  className="field"
+                  disabled={webHostMode === 'anon'}
+                />
+                <input
+                  value={webHostStationId}
+                  onChange={(e) => setWebHostStationId(e.target.value)}
+                  placeholder={webHostMode === 'anon' ? 'anon' : 'station id (optional)'}
+                  className="field"
+                  disabled={webHostMode === 'anon'}
+                />
+                <textarea
+                  value={webHostDescription}
+                  onChange={(e) => setWebHostDescription(e.target.value)}
+                  placeholder={webHostMode === 'anon' ? 'Open mic drop (4 minutes).' : 'Short description'}
+                  className="field min-h-[64px] resize-none py-3"
+                  disabled={webHostMode === 'anon'}
+                />
+                <div className="flex flex-wrap items-center gap-3 text-xs font-mono uppercase tracking-[0.2em] text-muted">
+                  <label className="glass-button rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-muted">
+                    Upload cover
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => handleCoverFile(e.target.files?.[0])}
+                    />
+                  </label>
+                  {webHostCover && (
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-[color:var(--cloud)]">cover loaded</span>
+                  )}
+                  {webHostRemaining && (
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-[color:var(--cloud)]">
+                      time left {webHostRemaining}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  onClick={beginWebHost}
+                  disabled={webHostBusy}
+                  className="glass-button rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-[color:var(--ion)] disabled:opacity-40"
+                >
+                  Go Live
+                </button>
+                <button
+                  onClick={stopWebHost}
+                  disabled={webHostBusy || !webHostToken}
+                  className="glass-button rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-ember disabled:opacity-40"
+                >
+                  Stop
+                </button>
+                <button
+                  onClick={() => copyText(webHostToken)}
+                  disabled={!webHostToken}
+                  className="glass-button rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-muted disabled:opacity-40"
+                >
+                  Copy token
+                </button>
+              </div>
+
+              {webHostIngest && (
+                <div className="mt-4 panel-inset p-4">
+                  <div className="kicker">Web ingest</div>
+                  {(['rtmpUrl', 'hlsUrl', 'webrtcUrl'] as const).map((key) => (
+                    <div key={key} className="mt-3">
+                      <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.2em] text-muted">
+                        <span>{key.replace('Url', '').toUpperCase()}</span>
+                        <button
+                          onClick={() => copyText(webHostIngest?.[key])}
+                          disabled={!webHostIngest?.[key]}
+                          className="glass-button rounded-full px-2 py-1 text-[9px] text-muted disabled:opacity-40"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                      <div className="mt-1 text-xs font-mono break-all text-[color:var(--cloud)]">
+                        {webHostIngest?.[key] || '--'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {webHostError && (
+                <div className="mt-3 text-xs font-mono uppercase tracking-[0.2em] text-ember">
+                  {webHostError}
+                </div>
+              )}
             </div>
 
             <div className="panel p-6">
