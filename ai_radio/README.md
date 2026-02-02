@@ -63,6 +63,12 @@ Tip: Use the **Registry** selector in the header to switch between Public, Local
 ## Deploy (public website + registry)
 This repo includes deploy configs for a hosted demo using Vercel (web UI) and Render (registry).
 
+See [DEPLOY.md](DEPLOY.md) for full setup instructions.
+
+Current Endpoints:
+- **Backend (Registry)**: https://keegan-qkgq.onrender.com
+- **Frontend (Console)**: *Pending Vercel Deployment*
+
 1) **Registry on Render**
    - Uses `render.yaml` (root).
    - Env:

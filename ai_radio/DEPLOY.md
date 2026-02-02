@@ -17,6 +17,7 @@ This guide covers deploying the **Registry Server** (Backend) and the **Web Cons
 3.  **Settings**:
     - **Name**: `keegan-registry`
     - **Region**: US East (or closest to you)
+    - **Root Directory**: `ai_radio`
     - **Runtime**: **Python 3**
     - **Build Command**: `pip install -r requirements.txt` (it's empty now, but good practice)
     - **Start Command**: `python server/registry_server.py` (or leave blank, it reads the `Procfile`)

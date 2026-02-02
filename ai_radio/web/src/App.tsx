@@ -3,7 +3,7 @@ import { HUD, type LiveState } from './components/HUD';
 import { StationDirectory, type Station, type Room } from './components/StationDirectory';
 import { engine, type Mood } from './lib/AudioEngine';
 
-const PUBLIC_REGISTRY_URL = import.meta.env.VITE_REGISTRY_URL || 'http://localhost:8090';
+const PUBLIC_REGISTRY_URL = import.meta.env.VITE_REGISTRY_URL || 'https://keegan-qkgq.onrender.com';
 const LOCAL_REGISTRY_URL = 'http://localhost:8090';
 const REGISTRY_KEY = import.meta.env.VITE_REGISTRY_KEY || '';
 const BRIDGE_KEY = import.meta.env.VITE_BRIDGE_KEY || '';
